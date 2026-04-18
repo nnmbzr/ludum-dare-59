@@ -1,5 +1,6 @@
 import { engine } from '@/app/getEngine';
 import { PausePopup } from '@/app/popups/PausePopup';
+import { loadTiledTileLayers } from '@/engine/tiledMap';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
@@ -13,6 +14,7 @@ export class GameScreen extends Container implements AppScreen {
 
   public mainContainer: Container;
   private paused = false;
+  private tiledRoot?: Container;
 
   constructor() {
     super();
@@ -30,6 +32,10 @@ export class GameScreen extends Container implements AppScreen {
 
   /** Show screen with animations */
   public async show(): Promise<void> {
+    if (!this.tiledRoot) {
+      this.tiledRoot = await loadTiledTileLayers('demo-map', { 'tiles.png': 'main/maps/tiles' });
+      this.mainContainer.addChildAt(this.tiledRoot, 0);
+    }
     await gsap.to(this.mainContainer, { alpha: 1, duration: 0.5 });
   }
 
@@ -74,6 +80,8 @@ export class GameScreen extends Container implements AppScreen {
   /** Fully reset */
   public reset() {
     this.cleanupEventHandlers();
+    this.tiledRoot?.destroy({ children: true });
+    this.tiledRoot = undefined;
   }
 
   /** Pause gameplay - automatically fired when a popup is presented */
