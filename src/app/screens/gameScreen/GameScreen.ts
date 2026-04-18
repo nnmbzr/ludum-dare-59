@@ -3,18 +3,27 @@ import { PausePopup } from '@/app/popups/PausePopup';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import {
   getTiledObjectsByTag,
-  loadTiledTileLayers,
-  type PlacedTiledObject,
+  loadTiledMapLayout,
   TiledObjectTags,
-  type TiledWorldLayers,
+  type PlacedTiledObject,
+  type TiledMapLayout,
 } from '@/engine/tiledMap';
 import gsap from 'gsap';
-import { Assets, Container, Graphics, type FederatedPointerEvent, type Ticker } from 'pixi.js';
+import {
+  Assets,
+  Container,
+  Graphics,
+  TilingSprite,
+  type FederatedPointerEvent,
+  type Texture,
+  type Ticker,
+} from 'pixi.js';
 
 const PLAYER_HALF = 18;
 const MAX_SPEED = 520;
 const VELOCITY_SMOOTH = 16;
 const MAX_DT = 0.032;
+const CAM_LAMBDA = 7;
 
 /** The screen that holds the app */
 export class GameScreen extends Container implements AppScreen {
@@ -35,6 +44,9 @@ export class GameScreen extends Container implements AppScreen {
 
   private readonly keysDown = new Set<string>();
   private readonly moveEase = gsap.parseEase('power2.out');
+
+  private camX = 0;
+  private camY = 0;
 
   private pushables: { node: Container; w: number; h: number }[] = [];
 
@@ -70,24 +82,26 @@ export class GameScreen extends Container implements AppScreen {
     }
     await Assets.loadBundle('dev');
 
-    const tiled = await loadTiledTileLayers('demo-map', {
-      'tiles.png': 'dev/maps/tiles',
-    });
-    const { root, mapWidthPx, mapHeightPx, objectsByTag } = tiled;
+    const layout = await loadTiledMapLayout('demo-map');
+    const { mapWidthPx, mapHeightPx, objectsByTag, debugRoot } = layout;
     this.roomW = mapWidthPx;
     this.roomH = mapHeightPx;
 
     const world = new Container();
 
-    const underlay = new Graphics();
-    const stripeW = 200;
-    for (let x = 0; x < mapWidthPx; x += stripeW) {
-      const alt = (x / stripeW) & 1;
-      underlay.rect(x, 0, stripeW, mapHeightPx).fill(alt ? 0x1a1a28 : 0x252538);
-    }
-    world.addChild(underlay);
+    const bgTex = await Assets.load<Texture>('dev/maps/room-bg');
+    const bg = new TilingSprite({
+      texture: bgTex,
+      width: mapWidthPx,
+      height: mapHeightPx,
+    });
+    bg.label = 'room_bg';
+    world.addChild(bg);
 
-    world.addChild(root);
+    if (debugRoot.children.length > 0) {
+      world.addChild(debugRoot);
+    }
+
     this.spawnMapProps(objectsByTag, world);
 
     const poles = new Graphics();
@@ -106,7 +120,10 @@ export class GameScreen extends Container implements AppScreen {
     this.worldContainer = world;
     this.player = player;
     this.mainContainer.addChildAt(world, 0);
-    this.syncCamera();
+    const ideal = this.computeIdealCamera();
+    this.camX = ideal.x;
+    this.camY = ideal.y;
+    this.applyWorldCamera();
 
     await gsap.to(this.mainContainer, { alpha: 1, duration: 0.5 });
   }
@@ -133,12 +150,12 @@ export class GameScreen extends Container implements AppScreen {
     px = this.resolvePushablesHorizontal(px, py, this.vx);
     this.player.x = Math.max(PLAYER_HALF, Math.min(this.roomW - PLAYER_HALF, px));
 
-    this.syncCamera();
+    this.updateCamera(dt);
   }
 
   /** Resize the screen, fired whenever window size changes */
   public resize(_width: number, _height: number) {
-    this.syncCamera();
+    this.applyWorldCamera();
   }
 
   /** Fully reset */
@@ -148,6 +165,8 @@ export class GameScreen extends Container implements AppScreen {
     this.worldContainer = undefined;
     this.player = undefined;
     this.pushables = [];
+    this.camX = 0;
+    this.camY = 0;
     this.vx = 0;
     this.paused = false;
     this.keysDown.clear();
@@ -217,7 +236,7 @@ export class GameScreen extends Container implements AppScreen {
     this.keysDown.delete(e.code);
   }
 
-  private spawnMapProps(objectsByTag: TiledWorldLayers['objectsByTag'], world: Container): void {
+  private spawnMapProps(objectsByTag: TiledMapLayout['objectsByTag'], world: Container): void {
     this.pushables = [];
     const scenery = getTiledObjectsByTag(objectsByTag, TiledObjectTags.SCENERY);
     const pushableDefs = getTiledObjectsByTag(objectsByTag, TiledObjectTags.PUSHABLE);
@@ -236,7 +255,9 @@ export class GameScreen extends Container implements AppScreen {
     c.label = `${po.tag}:${po.name || po.id}`;
     c.position.set(po.x, po.y);
     const g = new Graphics();
-    g.rect(0, 0, po.width, po.height).fill({ color: 0x5a6d52, alpha: 0.92 }).stroke({ width: 2, color: 0x323d2e, alpha: 0.85 });
+    g.rect(0, 0, po.width, po.height)
+      .fill({ color: 0x5a6d52, alpha: 0.92 })
+      .stroke({ width: 2, color: 0x323d2e, alpha: 0.85 });
     c.addChild(g);
     return c;
   }
@@ -317,27 +338,44 @@ export class GameScreen extends Container implements AppScreen {
     return px;
   }
 
-  private syncCamera() {
-    if (!this.worldContainer || !this.player) return;
+  private computeIdealCamera(): { x: number; y: number } {
+    if (!this.player) return { x: this.camX, y: this.camY };
     const vs = engine().virtualScreen;
     const vw = vs.virtualWidth;
     const vh = vs.virtualHeight;
     const halfW = vw * 0.5;
     const halfH = vh * 0.5;
 
-    let camX = this.player.x;
-    let camY = this.player.y;
+    let idealX = this.player.x;
+    let idealY = this.player.y;
     if (this.roomW > vw) {
-      camX = Math.max(halfW, Math.min(this.roomW - halfW, camX));
+      idealX = Math.max(halfW, Math.min(this.roomW - halfW, idealX));
     } else {
-      camX = this.roomW * 0.5;
+      idealX = this.roomW * 0.5;
     }
     if (this.roomH > vh) {
-      camY = Math.max(halfH, Math.min(this.roomH - halfH, camY));
+      idealY = Math.max(halfH, Math.min(this.roomH - halfH, idealY));
     } else {
-      camY = this.roomH * 0.5;
+      idealY = this.roomH * 0.5;
     }
+    return { x: idealX, y: idealY };
+  }
 
-    this.worldContainer.position.set(halfW - camX, halfH - camY);
+  private updateCamera(dt: number) {
+    if (!this.worldContainer || !this.player) return;
+    const ideal = this.computeIdealCamera();
+    const t = Math.min(1, CAM_LAMBDA * dt);
+    const w = this.moveEase(t);
+    this.camX += (ideal.x - this.camX) * w;
+    this.camY += (ideal.y - this.camY) * w;
+    this.applyWorldCamera();
+  }
+
+  private applyWorldCamera() {
+    if (!this.worldContainer) return;
+    const vs = engine().virtualScreen;
+    const halfW = vs.virtualWidth * 0.5;
+    const halfH = vs.virtualHeight * 0.5;
+    this.worldContainer.position.set(halfW - this.camX, halfH - this.camY);
   }
 }
