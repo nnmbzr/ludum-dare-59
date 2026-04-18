@@ -44,7 +44,7 @@ export const MAX_DT = 0.032; // 30 fps cap
   // Setup tickers
   engine.ticker.stop();
   const gsapTickerCallback: GSAPCallback = () => {
-    engine.ticker.update(gsap.globalTimeline.time());
+    engine.ticker.update(performance.now());
   };
   gsap.ticker.add(gsapTickerCallback);
 
