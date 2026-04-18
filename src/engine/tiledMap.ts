@@ -1,4 +1,15 @@
-import { Assets, Container, Rectangle, Sprite, Texture } from 'pixi.js';
+import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
+
+interface TiledObjectJson {
+  id: number;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  name?: string;
+  visible?: boolean;
+  point?: boolean;
+}
 
 interface TiledJson {
   tilewidth: number;
@@ -6,10 +17,13 @@ interface TiledJson {
   layers: {
     type?: string;
     name?: string;
-    width: number;
-    height: number;
-    data: number[];
+    width?: number;
+    height?: number;
+    data?: number[];
+    objects?: TiledObjectJson[];
     visible?: boolean;
+    x?: number;
+    y?: number;
   }[];
   tilesets: {
     firstgid: number;
@@ -21,6 +35,37 @@ interface TiledJson {
     margin?: number;
     spacing?: number;
   }[];
+}
+
+function addObjectGroupLayer(layer: TiledJson['layers'][number], root: Container): void {
+  if (layer.type !== 'objectgroup') return;
+  const layerRoot = new Container();
+  layerRoot.label = layer.name ?? '';
+  const layerX = layer.x ?? 0;
+  const layerY = layer.y ?? 0;
+
+  for (const obj of layer.objects ?? []) {
+    if (obj.visible === false) continue;
+
+    const x = layerX + obj.x;
+    const y = layerY + obj.y;
+    const w = obj.width ?? 0;
+    const h = obj.height ?? 0;
+    const isPoint = obj.point === true || (w === 0 && h === 0);
+
+    const g = new Graphics();
+    g.label = obj.name ? `${obj.name}#${obj.id}` : `obj#${obj.id}`;
+
+    if (isPoint) {
+      g.circle(0, 0, 8).fill({ color: 0xffdd44, alpha: 1 }).stroke({ width: 2, color: 0x333333, alpha: 1 });
+    } else {
+      g.rect(0, 0, w, h).fill({ color: 0x4488ff, alpha: 0.28 }).stroke({ width: 2, color: 0xffffff, alpha: 0.7 });
+    }
+    g.position.set(x, y);
+    layerRoot.addChild(g);
+  }
+
+  root.addChild(layerRoot);
 }
 
 function tileFrame(base: Texture, ts: TiledJson['tilesets'][number], localId: number): Texture {
@@ -50,7 +95,14 @@ export async function loadTiledTileLayers(mapAlias: string, imageToAsset: Record
 
   const root = new Container();
   for (const layer of map.layers) {
-    if (layer.type !== 'tilelayer' || layer.visible === false) continue;
+    if (layer.visible === false) continue;
+
+    if (layer.type === 'objectgroup') {
+      addObjectGroupLayer(layer, root);
+      continue;
+    }
+
+    if (layer.type !== 'tilelayer' || !layer.data || layer.width == null) continue;
 
     const layerRoot = new Container();
     layerRoot.label = layer.name ?? '';
