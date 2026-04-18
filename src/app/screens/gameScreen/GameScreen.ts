@@ -1,18 +1,19 @@
 import { engine } from '@/app/getEngine';
 import { PausePopup } from '@/app/popups/PausePopup';
 import type { AppScreen } from '@/engine/navigation/navigation';
+import { loadTiledTileLayers } from '@/engine/tiledMap';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 
 /** The screen that holds the app */
 export class GameScreen extends Container implements AppScreen {
-  /** Assets bundles required by this screen */
-  public static assetBundles = ['main'];
+  public static assetBundles = ['main', 'dev'];
   private boundOnPointerMove = this.onPointerMove.bind(this);
   private boundOnPointerDown = this.onPointerDown.bind(this);
 
   public mainContainer: Container;
   private paused = false;
+  private tiledRoot?: Container;
 
   constructor() {
     super();
@@ -30,6 +31,10 @@ export class GameScreen extends Container implements AppScreen {
 
   /** Show screen with animations */
   public async show(): Promise<void> {
+    if (!this.tiledRoot) {
+      this.tiledRoot = await loadTiledTileLayers('demo-map', { 'tiles.png': 'dev/maps/tiles' });
+      this.mainContainer.addChildAt(this.tiledRoot, 0);
+    }
     await gsap.to(this.mainContainer, { alpha: 1, duration: 0.5 });
   }
 
@@ -74,6 +79,8 @@ export class GameScreen extends Container implements AppScreen {
   /** Fully reset */
   public reset() {
     this.cleanupEventHandlers();
+    this.tiledRoot?.destroy({ children: true });
+    this.tiledRoot = undefined;
   }
 
   /** Pause gameplay - automatically fired when a popup is presented */
