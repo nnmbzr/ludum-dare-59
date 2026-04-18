@@ -1,5 +1,38 @@
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 
+/** Значения поля `type` у объектов Tiled — удобный доступ из кода по тегу. */
+export const TiledObjectTags = {
+  PUSHABLE: 'pushable',
+  SCENERY: 'scenery',
+} as const;
+
+export type TiledObjectTag = (typeof TiledObjectTags)[keyof typeof TiledObjectTags];
+
+const TAGGED_TYPES = new Set<string>(Object.values(TiledObjectTags));
+
+export interface PlacedTiledObject {
+  readonly tag: TiledObjectTag;
+  readonly id: number;
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export function getTiledObjectsByTag(
+  byTag: ReadonlyMap<TiledObjectTag, readonly PlacedTiledObject[]>,
+  tag: TiledObjectTag,
+): readonly PlacedTiledObject[] {
+  return byTag.get(tag) ?? [];
+}
+
+interface TiledPropertyJson {
+  name: string;
+  type?: string;
+  value: unknown;
+}
+
 interface TiledObjectJson {
   id: number;
   x: number;
@@ -9,9 +42,13 @@ interface TiledObjectJson {
   name?: string;
   visible?: boolean;
   point?: boolean;
+  type?: string;
+  properties?: TiledPropertyJson[];
 }
 
 interface TiledJson {
+  width: number;
+  height: number;
   tilewidth: number;
   tileheight: number;
   layers: {
@@ -37,7 +74,20 @@ interface TiledJson {
   }[];
 }
 
-function addObjectGroupLayer(layer: TiledJson['layers'][number], root: Container): void {
+function objectGameTag(obj: TiledObjectJson): TiledObjectTag | undefined {
+  const fromType = (obj.type ?? '').trim();
+  if (fromType && TAGGED_TYPES.has(fromType)) return fromType as TiledObjectTag;
+  const tagProp = obj.properties?.find((p) => p.name === 'tag');
+  const v = tagProp?.value;
+  if (typeof v === 'string' && TAGGED_TYPES.has(v)) return v as TiledObjectTag;
+  return undefined;
+}
+
+function addObjectGroupLayer(
+  layer: TiledJson['layers'][number],
+  root: Container,
+  objectsByTag: Map<TiledObjectTag, PlacedTiledObject[]>,
+): void {
   if (layer.type !== 'objectgroup') return;
   const layerRoot = new Container();
   layerRoot.label = layer.name ?? '';
@@ -53,6 +103,22 @@ function addObjectGroupLayer(layer: TiledJson['layers'][number], root: Container
     const h = obj.height ?? 0;
     const isPoint = obj.point === true || (w === 0 && h === 0);
 
+    const tag = objectGameTag(obj);
+    if (tag) {
+      const list = objectsByTag.get(tag) ?? [];
+      list.push({
+        tag,
+        id: obj.id,
+        name: obj.name ?? '',
+        x,
+        y,
+        width: w,
+        height: h,
+      });
+      objectsByTag.set(tag, list);
+      continue;
+    }
+
     const g = new Graphics();
     g.label = obj.name ? `${obj.name}#${obj.id}` : `obj#${obj.id}`;
 
@@ -65,7 +131,9 @@ function addObjectGroupLayer(layer: TiledJson['layers'][number], root: Container
     layerRoot.addChild(g);
   }
 
-  root.addChild(layerRoot);
+  if (layerRoot.children.length > 0) {
+    root.addChild(layerRoot);
+  }
 }
 
 function tileFrame(base: Texture, ts: TiledJson['tilesets'][number], localId: number): Texture {
@@ -81,7 +149,18 @@ function tileFrame(base: Texture, ts: TiledJson['tilesets'][number], localId: nu
   });
 }
 
-export async function loadTiledTileLayers(mapAlias: string, imageToAsset: Record<string, string>): Promise<Container> {
+export interface TiledWorldLayers {
+  root: Container;
+  mapWidthPx: number;
+  mapHeightPx: number;
+  /** Объекты с `type` / `tag` из Tiled, сгруппированные по тегу. */
+  objectsByTag: ReadonlyMap<TiledObjectTag, readonly PlacedTiledObject[]>;
+}
+
+export async function loadTiledTileLayers(
+  mapAlias: string,
+  imageToAsset: Record<string, string>,
+): Promise<TiledWorldLayers> {
   const map = (await Assets.load(mapAlias)) as TiledJson;
   const tilesets = [...map.tilesets].sort((a, b) => a.firstgid - b.firstgid);
 
@@ -93,12 +172,14 @@ export async function loadTiledTileLayers(mapAlias: string, imageToAsset: Record
     byImage.set(ts.image, Assets.get<Texture>(alias));
   }
 
+  const objectsByTag = new Map<TiledObjectTag, PlacedTiledObject[]>();
+
   const root = new Container();
   for (const layer of map.layers) {
     if (layer.visible === false) continue;
 
     if (layer.type === 'objectgroup') {
-      addObjectGroupLayer(layer, root);
+      addObjectGroupLayer(layer, root, objectsByTag);
       continue;
     }
 
@@ -131,5 +212,15 @@ export async function loadTiledTileLayers(mapAlias: string, imageToAsset: Record
     root.addChild(layerRoot);
   }
 
-  return root;
+  const frozen = new Map<TiledObjectTag, readonly PlacedTiledObject[]>();
+  for (const [k, v] of objectsByTag) {
+    frozen.set(k, v);
+  }
+
+  return {
+    root,
+    mapWidthPx: map.width * map.tilewidth,
+    mapHeightPx: map.height * map.tileheight,
+    objectsByTag: frozen,
+  };
 }
