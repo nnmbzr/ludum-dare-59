@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "start-dev-server",
+      "type": "shell",
+      "command": "pnpm run dev; exit 0",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      },
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Local:.*http://localhost"
+        }
+      }
+    },
+    {
+      "label": "kill-dev-server",
+      "type": "shell",
+      "command": "pnpm exec kill-port 8080",
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

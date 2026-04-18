@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug with Chrome",
+      "url": "http://localhost:8080/",
+      "webRoot": "${workspaceFolder}",
+      "runtimeArgs": ["--disable-web-security", "--auto-open-devtools-for-tabs"],
+      "userDataDir": "${workspaceFolder}/.vscode/chrome-dev-profile",
+      "preLaunchTask": "start-dev-server",
+      "postDebugTask": "kill-dev-server"
+    },
+    {
+      "type": "msedge",
+      "request": "launch",
+      "name": "Debug with Edge",
+      "url": "http://localhost:8080/",
+      "webRoot": "${workspaceFolder}",
+      "runtimeArgs": ["--disable-web-security", "--auto-open-devtools-for-tabs"],
+      "preLaunchTask": "start-dev-server",
+      "postDebugTask": "kill-dev-server"
+    }
+  ]
+}

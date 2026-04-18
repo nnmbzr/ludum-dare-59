@@ -1,0 +1,53 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Belgrade"
+    
+    # Разрешить обновления только для указанных пакетов
+    allow:
+      # production dependencies
+      - dependency-name: "@esotericsoftware/spine-pixi-v8"
+      - dependency-name: "@pixi/sound"
+      - dependency-name: "@pixi/ui"
+      - dependency-name: "gsap"
+      - dependency-name: "pixi-filters"
+      - dependency-name: "@pixi/layout"
+      - dependency-name: "pixi.js"
+      
+      # dev dependencies
+      - dependency-name: "@assetpack/core"
+      - dependency-name: "@pixi/devtools"
+    
+    # Группировка обновлений по типам
+    groups:
+      pixi-packages:
+        patterns:
+          - "@pixi/*"
+          - "pixi*"
+      
+      build-tools:
+        patterns:
+          - "@assetpack/*"
+    
+    # Игнорировать мажорные обновления (только minor и patch)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    
+    # Настройки pull request
+    open-pull-requests-limit: 5
+    
+    # Лейблы для PR
+    labels:
+      - "dependencies"
+      - "automated"
+    
+    # Настройки коммитов
+    commit-message:
+      prefix: "deps"
+      include: "scope"
