@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@esotericsoftware/spine-pixi-v8':
-        specifier: ^4.2.109
-        version: 4.2.109(pixi.js@8.18.1)
+        specifier: ^4.2.110
+        version: 4.2.110(pixi.js@8.18.1)
       '@pixi/layout':
         specifier: 3.2.0
         version: 3.2.0(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.5)(yoga-layout@3.2.1)
@@ -273,14 +273,14 @@ packages:
     resolution: {integrity: sha512-ZAoA40rNMPwSm+AeHpCq8STiNAwzWLJuP8Xv4CHIc9wv/PSuExjMrmjfYNj682vW0OOiZ1HKxzvjQr9XZIisQA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@esotericsoftware/spine-canvas@4.2.109':
-    resolution: {integrity: sha512-7tE5QbQgsxBAUUVCfEqK8MC2neUgnr7NwPOfYrqiNH1ooVjdchZxf2Nx+pIcX2CUh/FXbThpS1jfFxvVKaADVQ==}
+  '@esotericsoftware/spine-canvas@4.2.110':
+    resolution: {integrity: sha512-3qN6oRoatl5+cjm+GW1nF/Bj8yoQ8EGz3TVcLhPnO9Z8tKxj2mWhEdcBGC3+fE0aIrZoDYVaHa+/+mOcK853Kw==}
 
-  '@esotericsoftware/spine-core@4.2.109':
-    resolution: {integrity: sha512-Olr7p+qcy7ahWJoqwU8JsAPH0I54Pi7LjpJ512tLIgd0GkCi45Jh6N2JLPMAUZ6O+V77cpu+W1qyQ73W4nILeQ==}
+  '@esotericsoftware/spine-core@4.2.110':
+    resolution: {integrity: sha512-1j/EBTCfVziHsupcsl/LatvW5vA55PRf3SolwAMuEwHFBU9oEyS1A1+QfZCPlhFAQzcTo+4iHqgR8gqEsCKVZQ==}
 
-  '@esotericsoftware/spine-pixi-v8@4.2.109':
-    resolution: {integrity: sha512-LPHU2jaxlxr/T0lS5GS7mcvhGMVGGcMZy/Y50zVxYhajP5/YTii+PuP4pFEjpuqLozdFkhrQlhanVxrkxycBYw==}
+  '@esotericsoftware/spine-pixi-v8@4.2.110':
+    resolution: {integrity: sha512-H99FZ0fEU9eGOAIXiOLxF2pMjvMxnNEFr+pMnjQ2qcagmUOJfgC1p2HZ40Ij52vP46wBOmOpvYIaVvbcmGpVGQ==}
     peerDependencies:
       pixi.js: ^8.16.0
 
@@ -2530,15 +2530,15 @@ snapshots:
       '@eslint/core': 0.13.0
       levn: 0.4.1
 
-  '@esotericsoftware/spine-canvas@4.2.109':
+  '@esotericsoftware/spine-canvas@4.2.110':
     dependencies:
-      '@esotericsoftware/spine-core': 4.2.109
+      '@esotericsoftware/spine-core': 4.2.110
 
-  '@esotericsoftware/spine-core@4.2.109': {}
+  '@esotericsoftware/spine-core@4.2.110': {}
 
-  '@esotericsoftware/spine-pixi-v8@4.2.109(pixi.js@8.18.1)':
+  '@esotericsoftware/spine-pixi-v8@4.2.110(pixi.js@8.18.1)':
     dependencies:
-      '@esotericsoftware/spine-canvas': 4.2.109
+      '@esotericsoftware/spine-canvas': 4.2.110
       pixi.js: 8.18.1
 
   '@ffmpeg-installer/darwin-arm64@4.1.5':
