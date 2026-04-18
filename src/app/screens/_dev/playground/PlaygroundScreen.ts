@@ -52,7 +52,7 @@ export class PlaygroundScreen extends Container implements AppScreen {
   public update(time: Ticker) {
     if (this.paused) return;
 
-    const dt = Math.min(time.deltaMS, MAX_DT);
+    const dt = Math.min(time.deltaMS * 0.001, MAX_DT);
 
     this.boy.update(dt);
   }
