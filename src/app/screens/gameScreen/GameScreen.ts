@@ -1,130 +1,40 @@
 import { engine } from '@/app/getEngine';
 import { PausePopup } from '@/app/popups/PausePopup';
 import type { AppScreen } from '@/engine/navigation/navigation';
-import {
-  getTiledObjectsByTag,
-  loadTiledMapLayout,
-  TiledObjectTags,
-  type PlacedTiledObject,
-  type TiledMapLayout,
-} from '@/engine/tiledMap';
 import gsap from 'gsap';
-import {
-  Assets,
-  Container,
-  Graphics,
-  TilingSprite,
-  type FederatedPointerEvent,
-  type Texture,
-  type Ticker,
-} from 'pixi.js';
-
-const PLAYER_HALF = 18;
-const MAX_SPEED = 520;
-const VELOCITY_SMOOTH = 16;
-const MAX_DT = 0.032;
-const CAM_LAMBDA = 7;
+import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
+import { Background } from './Background';
 
 /** The screen that holds the app */
 export class GameScreen extends Container implements AppScreen {
-  public static assetBundles = ['main', 'dev'];
+  /** Assets bundles required by this screen */
+  public static assetBundles = ['main'];
   private boundOnPointerMove = this.onPointerMove.bind(this);
   private boundOnPointerDown = this.onPointerDown.bind(this);
-  private boundOnKeyDown = this.onKeyDown.bind(this);
-  private boundOnKeyUp = this.onKeyUp.bind(this);
 
   public mainContainer: Container;
   private paused = false;
 
-  private worldContainer?: Container;
-  private roomW = 0;
-  private roomH = 0;
-  private player?: Graphics;
-  private vx = 0;
-
-  private readonly keysDown = new Set<string>();
-  private readonly moveEase = gsap.parseEase('power2.out');
-
-  private camX = 0;
-  private camY = 0;
-
-  private pushables: { node: Container; w: number; h: number }[] = [];
+  /// /////////// Objects
+  private background: Background;
 
   constructor() {
     super();
 
     this.mainContainer = new Container();
+    this.background = new Background();
+    this.mainContainer.addChild(this.background);
     this.addChild(this.mainContainer);
   }
 
   /** Prepare the screen just before showing */
   public prepare() {
     this.mainContainer.alpha = 0;
-
-    this.cleanupEventHandlers();
     this.setupEventHandlers();
   }
 
   /** Show screen with animations */
   public async show(): Promise<void> {
-    this.mainContainer.scale.set(1);
-    this.paused = false;
-
-    this.worldContainer?.destroy({ children: true });
-    this.worldContainer = undefined;
-    this.player = undefined;
-    this.pushables = [];
-
-    try {
-      await Assets.unloadBundle('dev');
-    } catch {
-      /* бандл мог ещё не быть в кэше */
-    }
-    await Assets.loadBundle('dev');
-
-    const layout = await loadTiledMapLayout('demo-map');
-    const { mapWidthPx, mapHeightPx, objectsByTag, debugRoot } = layout;
-    this.roomW = mapWidthPx;
-    this.roomH = mapHeightPx;
-
-    const world = new Container();
-
-    const bgTex = await Assets.load<Texture>('dev/maps/room-bg');
-    const bg = new TilingSprite({
-      texture: bgTex,
-      width: mapWidthPx,
-      height: mapHeightPx,
-    });
-    bg.label = 'room_bg';
-    world.addChild(bg);
-
-    if (debugRoot.children.length > 0) {
-      world.addChild(debugRoot);
-    }
-
-    this.spawnMapProps(objectsByTag, world);
-
-    const poles = new Graphics();
-    for (let x = 0; x < mapWidthPx; x += 520) {
-      poles.rect(x, 0, 16, mapHeightPx).fill({ color: 0xffd54a, alpha: 0.9 });
-    }
-    world.addChild(poles);
-
-    const player = new Graphics()
-      .roundRect(-PLAYER_HALF, -PLAYER_HALF, PLAYER_HALF * 2, PLAYER_HALF * 2, 8)
-      .fill({ color: 0xec1561 })
-      .stroke({ width: 3, color: 0x4a1024, alpha: 1 });
-    player.position.set(this.roomW * 0.5, this.roomH * 0.5);
-    world.addChild(player);
-
-    this.worldContainer = world;
-    this.player = player;
-    this.mainContainer.addChildAt(world, 0);
-    const ideal = this.computeIdealCamera();
-    this.camX = ideal.x;
-    this.camY = ideal.y;
-    this.applyWorldCamera();
-
     await gsap.to(this.mainContainer, { alpha: 1, duration: 0.5 });
   }
 
@@ -134,42 +44,36 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   /** Update the screen */
-  public update(time: Ticker) {
-    if (this.paused || !this.player || !this.worldContainer) return;
+  public update(_time: Ticker) {
+    if (this.paused) return;
 
-    const dt = Math.min(time.deltaMS / 1000, MAX_DT);
-
-    const ix = this.readHorizontalInput();
-    const targetVx = ix * MAX_SPEED;
-    const blend = this.moveEase(Math.min(1, VELOCITY_SMOOTH * dt));
-    this.vx += (targetVx - this.vx) * blend;
-
-    const py = this.roomH * 0.5;
-    this.player.y = py;
-    let px = this.player.x + this.vx * dt;
-    px = this.resolvePushablesHorizontal(px, py, this.vx);
-    this.player.x = Math.max(PLAYER_HALF, Math.min(this.roomW - PLAYER_HALF, px));
-
-    this.updateCamera(dt);
+    // const dt = Math.min(time.deltaMS * 0.001, MAX_DT);
   }
 
   /** Resize the screen, fired whenever window size changes */
-  public resize(_width: number, _height: number) {
-    this.applyWorldCamera();
+  public resize(_width: number, _height: number) {}
+
+  private onPointerDown(_e: FederatedPointerEvent) {}
+
+  private onPointerMove(e: FederatedPointerEvent) {
+    const { x, y } = engine().virtualScreen.toVirtualCoordinates(e.global.x, e.global.y);
+    this.background.updateMouse(x, y);
+  }
+
+  private setupEventHandlers() {
+    this.on('pointermove', this.boundOnPointerMove);
+    this.on('pointerdown', this.boundOnPointerDown);
+    this.eventMode = 'static';
+  }
+
+  private cleanupEventHandlers() {
+    this.off('pointermove', this.boundOnPointerMove);
+    this.off('pointerdown', this.boundOnPointerDown);
   }
 
   /** Fully reset */
   public reset() {
     this.cleanupEventHandlers();
-    this.worldContainer?.destroy({ children: true });
-    this.worldContainer = undefined;
-    this.player = undefined;
-    this.pushables = [];
-    this.camX = 0;
-    this.camY = 0;
-    this.vx = 0;
-    this.paused = false;
-    this.keysDown.clear();
   }
 
   /** Pause gameplay - automatically fired when a popup is presented */
@@ -189,193 +93,5 @@ export class GameScreen extends Container implements AppScreen {
     if (!engine().navigation.currentPopup) {
       engine().navigation.presentPopup(PausePopup);
     }
-  }
-
-  private setupEventHandlers() {
-    document.addEventListener('keydown', this.boundOnKeyDown, true);
-    document.addEventListener('keyup', this.boundOnKeyUp, true);
-    this.on('pointermove', this.boundOnPointerMove);
-    this.on('pointerdown', this.boundOnPointerDown);
-    this.eventMode = 'static';
-  }
-
-  private cleanupEventHandlers() {
-    document.removeEventListener('keydown', this.boundOnKeyDown, true);
-    document.removeEventListener('keyup', this.boundOnKeyUp, true);
-    this.off('pointermove', this.boundOnPointerMove);
-    this.off('pointerdown', this.boundOnPointerDown);
-  }
-
-  private onPointerDown(e: FederatedPointerEvent) {
-    const { x, y } = engine().virtualScreen.toVirtualCoordinates(e.global.x, e.global.y);
-
-    console.log(`Pointer down at (${x}, ${y})`);
-  }
-
-  private onPointerMove(e: FederatedPointerEvent) {
-    const { x, y } = engine().virtualScreen.toVirtualCoordinates(e.global.x, e.global.y);
-
-    console.log(`Pointer move at (${x}, ${y})`);
-  }
-
-  private readHorizontalInput(): number {
-    let x = 0;
-    if (this.keysDown.has('KeyA')) x -= 1;
-    if (this.keysDown.has('KeyD')) x += 1;
-    return x;
-  }
-
-  private onKeyDown(e: KeyboardEvent) {
-    if (e.code === 'KeyA' || e.code === 'KeyD') {
-      e.preventDefault();
-      this.keysDown.add(e.code);
-    }
-  }
-
-  private onKeyUp(e: KeyboardEvent) {
-    this.keysDown.delete(e.code);
-  }
-
-  private spawnMapProps(objectsByTag: TiledMapLayout['objectsByTag'], world: Container): void {
-    this.pushables = [];
-    const scenery = getTiledObjectsByTag(objectsByTag, TiledObjectTags.SCENERY);
-    const pushableDefs = getTiledObjectsByTag(objectsByTag, TiledObjectTags.PUSHABLE);
-    for (const po of scenery) {
-      world.addChild(this.makeSceneryVisual(po));
-    }
-    for (const po of pushableDefs) {
-      const node = this.makePushableVisual(po);
-      world.addChild(node);
-      this.pushables.push({ node, w: po.width, h: po.height });
-    }
-  }
-
-  private makeSceneryVisual(po: PlacedTiledObject): Container {
-    const c = new Container();
-    c.label = `${po.tag}:${po.name || po.id}`;
-    c.position.set(po.x, po.y);
-    const g = new Graphics();
-    g.rect(0, 0, po.width, po.height)
-      .fill({ color: 0x5a6d52, alpha: 0.92 })
-      .stroke({ width: 2, color: 0x323d2e, alpha: 0.85 });
-    c.addChild(g);
-    return c;
-  }
-
-  private makePushableVisual(po: PlacedTiledObject): Container {
-    const c = new Container();
-    c.label = `${po.tag}:${po.name || po.id}`;
-    c.position.set(po.x, po.y);
-    const g = new Graphics()
-      .roundRect(0, 0, po.width, po.height, 14)
-      .fill({ color: 0xa07040, alpha: 1 })
-      .stroke({ width: 4, color: 0x3d2414, alpha: 1 });
-    c.addChild(g);
-    return c;
-  }
-
-  private resolvePushablesHorizontal(px: number, py: number, velX: number): number {
-    if (this.pushables.length === 0) return px;
-    const ph = PLAYER_HALF;
-    const ordered =
-      velX >= 0
-        ? [...this.pushables].sort((a, b) => a.node.position.x - b.node.position.x)
-        : [...this.pushables].sort((a, b) => b.node.position.x - a.node.position.x);
-    let x = px;
-    for (const p of ordered) {
-      x = this.separatePlayerFromCrate(x, py, ph, velX, p);
-    }
-    return x;
-  }
-
-  private separatePlayerFromCrate(
-    px: number,
-    py: number,
-    ph: number,
-    velX: number,
-    p: { node: Container; w: number; h: number },
-  ): number {
-    let cx = p.node.position.x;
-    const cy = p.node.position.y;
-    const cw = p.w;
-    const ch = p.h;
-
-    if (py + ph <= cy || py - ph >= cy + ch) {
-      return px;
-    }
-
-    const pl = px - ph;
-    const pr = px + ph;
-    if (pr <= cx || pl >= cx + cw) {
-      return px;
-    }
-
-    if (Math.abs(velX) < 1e-6) {
-      const penL = pr - cx;
-      const penR = cx + cw - pl;
-      if (penL < penR) px = cx - ph;
-      else px = cx + cw + ph;
-      p.node.position.x = cx;
-      return px;
-    }
-
-    if (velX > 0) {
-      let pen = pr - cx;
-      if (pen > 0) {
-        cx = Math.min(this.roomW - cw, cx + pen);
-        pen = pr - cx;
-        if (pen > 0) px = cx - ph;
-      }
-    } else {
-      let pen = cx + cw - pl;
-      if (pen > 0) {
-        cx = Math.max(0, cx - pen);
-        pen = cx + cw - pl;
-        if (pen > 0) px = cx + cw + ph;
-      }
-    }
-    p.node.position.x = cx;
-    return px;
-  }
-
-  private computeIdealCamera(): { x: number; y: number } {
-    if (!this.player) return { x: this.camX, y: this.camY };
-    const vs = engine().virtualScreen;
-    const vw = vs.virtualWidth;
-    const vh = vs.virtualHeight;
-    const halfW = vw * 0.5;
-    const halfH = vh * 0.5;
-
-    let idealX = this.player.x;
-    let idealY = this.player.y;
-    if (this.roomW > vw) {
-      idealX = Math.max(halfW, Math.min(this.roomW - halfW, idealX));
-    } else {
-      idealX = this.roomW * 0.5;
-    }
-    if (this.roomH > vh) {
-      idealY = Math.max(halfH, Math.min(this.roomH - halfH, idealY));
-    } else {
-      idealY = this.roomH * 0.5;
-    }
-    return { x: idealX, y: idealY };
-  }
-
-  private updateCamera(dt: number) {
-    if (!this.worldContainer || !this.player) return;
-    const ideal = this.computeIdealCamera();
-    const t = Math.min(1, CAM_LAMBDA * dt);
-    const w = this.moveEase(t);
-    this.camX += (ideal.x - this.camX) * w;
-    this.camY += (ideal.y - this.camY) * w;
-    this.applyWorldCamera();
-  }
-
-  private applyWorldCamera() {
-    if (!this.worldContainer) return;
-    const vs = engine().virtualScreen;
-    const halfW = vs.virtualWidth * 0.5;
-    const halfH = vs.virtualHeight * 0.5;
-    this.worldContainer.position.set(halfW - this.camX, halfH - this.camY);
   }
 }

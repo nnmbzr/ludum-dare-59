@@ -31,7 +31,7 @@ export class TemplateScreen extends Container implements AppScreen {
   public update(_time: Ticker) {
     if (this.paused) return;
 
-    // const dt = Math.min(time.deltaMS, MAX_DT);
+    // const dt = Math.min(time.deltaMS * 0.001, MAX_DT);
   }
 
   /** Resize the screen, fired whenever window size changes */
