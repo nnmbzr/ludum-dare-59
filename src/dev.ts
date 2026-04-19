@@ -1,3 +1,4 @@
+import { DrawingScreen } from './app/screens/drawing/DrawingScreen';
 import { PlaygroundScreen } from './app/screens/_dev/playground/PlaygroundScreen';
 import type { AppScreenConstructor } from './engine/navigation/navigation';
 
@@ -12,6 +13,8 @@ export function getAppScreenByName(name: string): AppScreenConstructor {
   switch (name) {
     case 'PlaygroundScreen':
       return PlaygroundScreen;
+    case 'DrawingScreen':
+      return DrawingScreen;
     default:
       throw new Error(`Unknown screen name: ${name}`);
   }
