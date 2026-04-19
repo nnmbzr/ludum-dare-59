@@ -3,10 +3,32 @@ import { Spine } from '@esotericsoftware/spine-pixi-v8';
 import gsap from 'gsap';
 import { Container } from 'pixi.js';
 import { FisheyeFilter } from './FisheyeFilter';
+import { GameDrawingBoard } from './GameDrawingBoard';
+
+const DRAWING_PAD_SLOT = 'Container_Drawing_Pad';
+
+const DRAWING_PAD_BOARD_OFFSET_X = -228;
+const DRAWING_PAD_BOARD_OFFSET_Y = -302;
+const DRAWING_PAD_BOARD_SLOT_SCALE = 0.86;
+
+const HOLST_CAMERA_INNER_DIST = 560;
+const HOLST_CAMERA_OUTER_DIST = 1600;
+const HOLST_CAMERA_INNER_DIST_ABOVE = 200;
+const HOLST_CAMERA_OUTER_DIST_ABOVE = 380;
+
+const HOLST_LOCK_SCREEN_OFFSET_X = 56;
+const HOLST_LOCK_SCREEN_OFFSET_Y = 240;
 
 const CAMERA_LAG = 0.45;
 const SPINE_MAX_DT = 0.032;
 const PARALLAX_OVERSCAN = 2.1;
+
+function holstFollowWeight(dist: number, inner: number, outer: number): number {
+  if (dist <= inner) return 1;
+  if (dist >= outer) return 0;
+  const t = (outer - dist) / (outer - inner);
+  return t * t * (3 - 2 * t);
+}
 
 export class Background extends Container {
   private spine: Spine;
@@ -14,6 +36,7 @@ export class Background extends Container {
 
   constructor() {
     super();
+    this.sortableChildren = true;
 
     this.spine = Spine.from({
       skeleton: 'background.json',
@@ -32,6 +55,19 @@ export class Background extends Container {
     this.spine.state.setAnimation(0, 'animation', true);
 
     this.addChild(this.spine);
+  }
+
+  public mountDrawingBoard(layer: Container): void {
+    this.spine.removeSlotObject(layer);
+    if (layer.parent) layer.removeFromParent();
+    this.spine.addSlotObject(DRAWING_PAD_SLOT, layer);
+    if (layer instanceof GameDrawingBoard) {
+      layer.setSpineSlotBoardNudge(
+        DRAWING_PAD_BOARD_OFFSET_X,
+        DRAWING_PAD_BOARD_OFFSET_Y,
+        DRAWING_PAD_BOARD_SLOT_SCALE,
+      );
+    }
   }
 
   private layoutBackgroundSpine() {
@@ -54,21 +90,45 @@ export class Background extends Container {
     this.spine.update(dt);
   }
 
-  /** Call with virtual screen coordinates on pointer move */
-  public updateMouse(x: number, y: number): void {
+  public updateMouse(x: number, y: number, holstCenterVirtual: { x: number; y: number } | null = null): void {
     const nx = (x - SCREEN_WIDTH / 2) / (SCREEN_WIDTH / 2);
     const ny = (y - SCREEN_HEIGHT / 2) / (SCREEN_HEIGHT / 2);
 
-    this.spine.update(0);
     const lb = this.spine.getLocalBounds();
-    const spriteW = lb.width * Math.abs(this.spine.scale.x);
-    const spriteH = lb.height * Math.abs(this.spine.scale.y);
+    const spriteW = Math.max(1e-3, lb.width * Math.abs(this.spine.scale.x));
+    const spriteH = Math.max(1e-3, lb.height * Math.abs(this.spine.scale.y));
     const maxOffsetX = Math.max(0, spriteW * 0.5 - SCREEN_WIDTH / 2);
     const maxOffsetY = Math.max(0, spriteH * 0.5 - SCREEN_HEIGHT / 2);
 
+    const parallaxX = -nx * maxOffsetX;
+    const parallaxY = -ny * maxOffsetY;
+
+    let targetX = parallaxX;
+    let targetY = parallaxY;
+
+    if (holstCenterVirtual) {
+      const cx = holstCenterVirtual.x;
+      const cy = holstCenterVirtual.y;
+      const dist = Math.hypot(x - cx, y - cy);
+      const aboveHolst = y < cy;
+      const inner = aboveHolst ? HOLST_CAMERA_INNER_DIST_ABOVE : HOLST_CAMERA_INNER_DIST;
+      const outer = aboveHolst ? HOLST_CAMERA_OUTER_DIST_ABOVE : HOLST_CAMERA_OUTER_DIST;
+      const w = holstFollowWeight(dist, inner, outer);
+      if (w > 0) {
+        const lockCx = SCREEN_WIDTH * 0.5 - HOLST_LOCK_SCREEN_OFFSET_X;
+        const lockCy = SCREEN_HEIGHT * 0.5 - HOLST_LOCK_SCREEN_OFFSET_Y;
+        let lockX = this.x + lockCx - cx;
+        let lockY = this.y + lockCy - cy;
+        lockX = Math.max(-maxOffsetX, Math.min(maxOffsetX, lockX));
+        lockY = Math.max(-maxOffsetY, Math.min(maxOffsetY, lockY));
+        targetX = parallaxX * (1 - w) + lockX * w;
+        targetY = parallaxY * (1 - w) + lockY * w;
+      }
+    }
+
     gsap.to(this, {
-      x: -nx * maxOffsetX,
-      y: -ny * maxOffsetY,
+      x: targetX,
+      y: targetY,
       duration: CAMERA_LAG,
       ease: 'sine.out',
       overwrite: true,
@@ -77,8 +137,12 @@ export class Background extends Container {
     const left = this.spine.x - spriteW * 0.5;
     const top = this.spine.y - spriteH * 0.5;
 
-    const u = (x - this.x - left) / spriteW;
-    const v = (y - this.y - top) / spriteH;
+    let u = (x - this.x - left) / spriteW;
+    let v = (y - this.y - top) / spriteH;
+    if (!Number.isFinite(u) || !Number.isFinite(v)) {
+      u = 0.5;
+      v = 0.5;
+    }
 
     this.fisheyeFilter.setCenter(Math.max(0, Math.min(1, u)), Math.max(0, Math.min(1, v)));
   }

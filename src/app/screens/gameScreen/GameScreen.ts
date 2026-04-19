@@ -7,7 +7,7 @@ import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background } from './Background';
 import { Balance } from './Balance';
 import { DayTimer } from './DayTimer';
-import { Drawing } from './Drawing';
+import { GameDrawingBoard } from './GameDrawingBoard';
 import { Guessing } from './Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
@@ -32,7 +32,7 @@ export class GameScreen extends Container implements AppScreen {
   private balance: Balance;
   private server: Server;
   private visitor: Visitor;
-  private drawing: Drawing;
+  private drawing: GameDrawingBoard;
   private guessing: Guessing;
   private dayTimer: DayTimer;
   private hintPanel: HintPanel;
@@ -56,20 +56,14 @@ export class GameScreen extends Container implements AppScreen {
     // Игровые объекты
     this.background = new Background();
     this.visitor = new Visitor(this.balance);
-    this.drawing = new Drawing();
+    this.drawing = new GameDrawingBoard();
     this.guessing = new Guessing(this.balance);
     this.dayTimer = new DayTimer();
     this.hintPanel = new HintPanel();
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
-    this.mainContainer.addChild(
-      this.background,
-      this.visitor,
-      this.drawing,
-      this.guessing,
-      this.dayTimer,
-      this.hintPanel,
-    );
+    this.mainContainer.addChild(this.background, this.visitor, this.guessing, this.dayTimer, this.hintPanel);
+    this.background.mountDrawingBoard(this.drawing);
 
     this.wireCallbacks();
   }
@@ -92,6 +86,7 @@ export class GameScreen extends Container implements AppScreen {
   public prepare() {
     this.mainContainer.alpha = 0;
     this.setupEventHandlers();
+    this.drawing.activate();
 
     // TODO: загрузить baked photofits из ассетов и передать в server.setBakedPhotofits(...)
 
@@ -119,6 +114,7 @@ export class GameScreen extends Container implements AppScreen {
 
     // Видимые системы
     this.background.updateFrame(deltaMs);
+    this.drawing.tick(time);
     this.visitor.update(deltaMs);
 
     // Логика стейта
@@ -616,7 +612,7 @@ export class GameScreen extends Container implements AppScreen {
 
   private onPointerMove(e: FederatedPointerEvent) {
     const { x, y } = engine().virtualScreen.toVirtualCoordinates(e.global.x, e.global.y);
-    this.background.updateMouse(x, y);
+    this.background.updateMouse(x, y, this.drawing.getHolstCenterVirtual());
   }
 
   private setupEventHandlers() {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const DB_NAME = 'ludum-dare-devconsole';
 const DB_VERSION = 1;
 
@@ -83,9 +82,16 @@ async function clearAll() {
   });
 }
 
-(window as any).USED_DEV_CONSOLE = true;
+type DevConsoleWindow = Window & {
+  USED_DEV_CONSOLE?: boolean;
+  UNREGISTER_DEV_CONSOLE_SW?: () => Promise<void>;
+};
 
-(window as any).UNREGISTER_DEV_CONSOLE_SW = async () => {
+const win = window as DevConsoleWindow;
+
+win.USED_DEV_CONSOLE = true;
+
+win.UNREGISTER_DEV_CONSOLE_SW = async () => {
   if ('serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const registration of registrations) {
@@ -100,8 +106,7 @@ async function clearAll() {
 async function registerSW() {
   if ('serviceWorker' in navigator) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const reg = await navigator.serviceWorker.register('/devconsole-sw.js');
+      await navigator.serviceWorker.register('/devconsole-sw.js');
 
       // Listen for messages from SW to track requested URLs
       navigator.serviceWorker.addEventListener('message', (event) => {
@@ -125,7 +130,7 @@ async function registerSW() {
 // UI Rendering
 
 let isPanelOpen = false;
-let renderTimeout: any;
+let renderTimeout: ReturnType<typeof setTimeout> | undefined;
 
 function scheduleRender() {
   if (renderTimeout) clearTimeout(renderTimeout);
