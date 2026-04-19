@@ -1,11 +1,10 @@
+import type { ValuesOf } from '@/app/utils/typesHelper';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@/main';
 import { Spine } from '@esotericsoftware/spine-pixi-v8';
 import gsap from 'gsap';
 import { Container } from 'pixi.js';
 import { FisheyeFilter } from './FisheyeFilter';
 import { GameDrawingBoard } from './GameDrawingBoard';
-
-const DRAWING_PAD_SLOT = 'Container_Drawing_Pad';
 
 const DRAWING_PAD_BOARD_OFFSET_X = -228;
 const DRAWING_PAD_BOARD_OFFSET_Y = -302;
@@ -29,6 +28,21 @@ function holstFollowWeight(dist: number, inner: number, outer: number): number {
   const t = (outer - dist) / (outer - inner);
   return t * t * (3 - 2 * t);
 }
+
+export const BACKGROUND_SLOTS = {
+  CLOCK: 'Container_Timer',
+  FAX: 'Container_Fax',
+  CALENDAR: 'Container_Calendar',
+  LEFT_MONITOR: 'Container_TV_01',
+  CENTER_MONITOR: 'Container_TV_02',
+  RIGHT_MONITOR: 'Container_TV_03',
+  BIG_MONITOR: 'Container_TV_04',
+  STAMP: 'Container_Stamp',
+  DRAWING_PAD: 'Container_Drawing_Pad',
+  HINT: 'Container_text_01',
+  TARGET_QUOTA: 'Container_text_02',
+} as const;
+type BACKGROUND_SLOTS = ValuesOf<typeof BACKGROUND_SLOTS>;
 
 export class Background extends Container {
   private spine: Spine;
@@ -60,7 +74,7 @@ export class Background extends Container {
   public mountDrawingBoard(layer: Container): void {
     this.spine.removeSlotObject(layer);
     if (layer.parent) layer.removeFromParent();
-    this.spine.addSlotObject(DRAWING_PAD_SLOT, layer);
+    this.spine.addSlotObject(BACKGROUND_SLOTS.DRAWING_PAD, layer);
     if (layer instanceof GameDrawingBoard) {
       layer.setSpineSlotBoardNudge(
         DRAWING_PAD_BOARD_OFFSET_X,
@@ -68,6 +82,10 @@ export class Background extends Container {
         DRAWING_PAD_BOARD_SLOT_SCALE,
       );
     }
+  }
+
+  public addObjectToSlot(slotName: BACKGROUND_SLOTS, object: Container): void {
+    this.spine.addSlotObject(slotName, object);
   }
 
   private layoutBackgroundSpine() {

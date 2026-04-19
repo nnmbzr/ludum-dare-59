@@ -1,18 +1,20 @@
 import { engine } from '@/app/getEngine';
 import { PausePopup } from '@/app/popups/PausePopup';
+import { DEBUG_GAME_STATE } from '@/dev';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import { waitFor } from '@/engine/utils/waitFor';
+import { MAX_DT } from '@/main';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
-import { Background } from './Background';
+import { Background, BACKGROUND_SLOTS } from './Background';
 import { Balance } from './Balance';
 import { DayTimer } from './DayTimer';
 import { GameDrawingBoard } from './GameDrawingBoard';
 import { Guessing } from './Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
-import { Visitor } from './Visitor';
 import { GameStates, type GameState, type GuessTarget, type SkinSet } from './types';
+import { BigMonitor } from './visitors/BigMonitor';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -31,14 +33,14 @@ export class GameScreen extends Container implements AppScreen {
   // === Systems / visuals ===
   private balance: Balance;
   private server: Server;
-  private visitor: Visitor;
+  private bigMonitor: BigMonitor;
   private drawing: GameDrawingBoard;
   private guessing: Guessing;
   private dayTimer: DayTimer;
   private hintPanel: HintPanel;
 
   // === State ===
-  private _state: GameState = GameStates.GAME_RESET;
+  private _state: GameState = DEBUG_GAME_STATE || GameStates.GAME_RESET;
   private spawnDelayMs = 0;
   private notificationPollMs = 0;
   private paused = false;
@@ -55,14 +57,17 @@ export class GameScreen extends Container implements AppScreen {
 
     // Игровые объекты
     this.background = new Background();
-    this.visitor = new Visitor(this.balance);
+
+    this.bigMonitor = new BigMonitor(this.balance);
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigMonitor.getTVSpine());
+
     this.drawing = new GameDrawingBoard();
     this.guessing = new Guessing(this.balance);
     this.dayTimer = new DayTimer();
     this.hintPanel = new HintPanel();
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
-    this.mainContainer.addChild(this.background, this.visitor, this.guessing, this.dayTimer, this.hintPanel);
+    this.mainContainer.addChild(this.background, this.bigMonitor, this.guessing, this.dayTimer, this.hintPanel);
     this.background.mountDrawingBoard(this.drawing);
 
     this.wireCallbacks();
@@ -70,7 +75,7 @@ export class GameScreen extends Container implements AppScreen {
 
   /** Проводки между системами.. */
   private wireCallbacks(): void {
-    this.visitor.onVisitorLeft = () => this.handleVisitorLeft();
+    this.bigMonitor.onVisitorLeft = () => this.handleVisitorLeft();
 
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
@@ -93,6 +98,7 @@ export class GameScreen extends Container implements AppScreen {
     // TODO: нужно подумать. Потому что может быть лучше вместо того чтобы оставаться в GameScreen, таки переходить в другой экран. Просто чистить и так далее.
     //  В этом случае нужно будет добавить сюда приравнивание this._state = GameStates.GAME_RESET
     // Ну и убедиться что в функции this.reset() мы тоже всё чистим и приравниваем к начальному состоянию.
+
     this.goToNextState();
   }
 
@@ -106,7 +112,9 @@ export class GameScreen extends Container implements AppScreen {
 
   public update(time: Ticker): void {
     if (this.paused) return;
+
     const deltaMs = time.deltaMS;
+    const dt = Math.min(time.deltaMS * 0.001, MAX_DT);
 
     // Таймер дня
     this.dayTimer.update(deltaMs);
@@ -115,7 +123,9 @@ export class GameScreen extends Container implements AppScreen {
     // Видимые системы
     this.background.updateFrame(deltaMs);
     this.drawing.tick(time);
-    this.visitor.update(deltaMs);
+
+    // FIXME: Syncronyze all dt!
+    this.bigMonitor.update(dt);
 
     // Логика стейта
     this.tickState(deltaMs);
@@ -174,7 +184,7 @@ export class GameScreen extends Container implements AppScreen {
     if (this.spawnDelayMs > 0) {
       this.spawnDelayMs -= deltaMs;
       if (this.spawnDelayMs <= 0) {
-        this.visitor.triggerAlarm();
+        this.bigMonitor.triggerAlarm();
         // FIXME: сейчас мы считаем прямо тут, внутри. Вместо этого нужно перенести логику старта и расчёта задержки в visitor
         // this.setState(GameStates.alarmOn);
       }
@@ -190,6 +200,10 @@ export class GameScreen extends Container implements AppScreen {
     //
 
     console.log('Текущий стейт:', this.state);
+
+    // Тестовая задержка перед тем как заапрувить фоторобот.
+    // FIXME: НЕ ЗАБЫТЬ УДАЛИТЬ ПОСЛЕ ТЕСТОВ!
+    const testDrawingTimeToLev = 180_000;
 
     let nextState: GameState | undefined;
 
@@ -246,17 +260,18 @@ export class GameScreen extends Container implements AppScreen {
         this.hintPanel.setHintForState(this.state);
 
         // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
-        // Загорается лампочка на правом мониторе.
+        // +++ Загорается лампочка на правом мониторе.
+        this.bigMonitor.triggerAlarm();
         // Возможно что-то происходит с экраном.
 
         // Кнопка становится доступна для клика.
         // FIXME: тестово делаем по ней "клик". Нужно будет выпилить и реализовать через кнопку!!!
         setTimeout(() => {
-          this.visitor.onCameraButtonPressed();
+          this.bigMonitor.onCameraButtonPressed();
           console.log('Кнопка на камере нажата!');
         }, 2000);
         // Ждём пока пользователь не кликнет по кнопке камеры.
-        await this.visitor.waitForCameraButtonPress();
+        await this.bigMonitor.waitForCameraButtonPress();
 
         // Переходим на следующий стейт
         nextState = GameStates.visitorOnCamera;
@@ -274,6 +289,8 @@ export class GameScreen extends Container implements AppScreen {
         this.hintPanel.setHintForState(this.state);
 
         // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
+        // Показываем посетителя на камере
+        this.bigMonitor.showVisitorOnCamera();
         // Возможно отбираем в этот момент управление? (ЭКСПЕРИМЕНТАЛЬНО)
         // По идее, в этот-же момент должна включиться анимация вылезания папки.
         // Уменьшаем каунтер папок.
@@ -317,7 +334,7 @@ export class GameScreen extends Container implements AppScreen {
         // FIXME: тестово эмулируем нажатие на штамп.
         setTimeout(() => {
           this.drawing.onStampButtonPressed();
-        }, 2000);
+        }, testDrawingTimeToLev);
 
         // TODO: Ждём пока пользователь нажмёт на подтверждение
         await this.drawing.waitForStampButtonPress();
@@ -325,7 +342,8 @@ export class GameScreen extends Container implements AppScreen {
         // TODO: РЕАЛИЗОВАТЬ
         // После этого запускается анимация закрытия и ухода папки.
         // Увеличивается счётчик обслуженных посетителей.
-        // Камера гаснет (если посетитель уже на камере, то потом просто скрываем его).
+        // ++++ Камера гаснет (если посетитель уже на камере, то потом просто скрываем его).
+        this.bigMonitor.turnOffCamera();
         // Сейчас просто эмулируем все эти анимации
         await waitFor(3);
 
