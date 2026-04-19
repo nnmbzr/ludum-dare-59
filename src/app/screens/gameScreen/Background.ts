@@ -14,7 +14,7 @@ export class Background extends Container {
 
     this.sprite = Sprite.from('TestBackground');
     this.sprite.anchor.set(0.5);
-    this.sprite.scale.set(1.5);
+    this.sprite.scale.set(1);
     this.sprite.position.set(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 
     this.fisheyeFilter = new FisheyeFilter(0.25);
