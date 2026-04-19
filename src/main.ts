@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import PixiPlugin from 'gsap/PixiPlugin';
 import * as PIXI from 'pixi.js';
 import { setEngine } from './app/getEngine';
+import { DrawingScreen } from './app/screens/drawing/DrawingScreen';
 import { GameScreen } from './app/screens/gameScreen/GameScreen';
 import { LoadScreen } from './app/screens/LoadScreen';
 import { userSettings } from './app/utils/userSettings';
@@ -75,4 +76,12 @@ export const MAX_DT = 0.032; // 30 fps cap
   } else {
     await engine.navigation.showScreen(GameScreen);
   }
+
+  const nav = engine.navigation;
+  document.getElementById('screen-scene-btn')?.addEventListener('click', () => {
+    void nav.showScreen(GameScreen);
+  });
+  document.getElementById('screen-drawing-btn')?.addEventListener('click', () => {
+    void nav.showScreen(DrawingScreen);
+  });
 })();
