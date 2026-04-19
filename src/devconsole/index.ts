@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const DB_NAME = 'ludum-dare-devconsole';
 const DB_VERSION = 1;
 
@@ -82,15 +83,6 @@ async function clearAll() {
   });
 }
 
-function normalizeUrl(inputUrl: string) {
-  try {
-    const parsed = new URL(inputUrl, window.location.origin);
-    return parsed.pathname;
-  } catch (e) {
-    return inputUrl;
-  }
-}
-
 (window as any).USED_DEV_CONSOLE = true;
 
 (window as any).UNREGISTER_DEV_CONSOLE_SW = async () => {
@@ -108,6 +100,7 @@ function normalizeUrl(inputUrl: string) {
 async function registerSW() {
   if ('serviceWorker' in navigator) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const reg = await navigator.serviceWorker.register('/devconsole-sw.js');
 
       // Listen for messages from SW to track requested URLs

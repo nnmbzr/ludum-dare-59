@@ -40,6 +40,7 @@ export const GameStates = {
   showGuessingResult: 'showGuessingResult', // показываем результат угадывания
   dayEnded: 'dayEnded', // можем перейти в это состояние ИЗ ЛЮБОГО СТЕЙТА! Так как игра на время.
   gameOver: 'gameOver', // не выполнили норму, проиграли
+  wellDone: 'wellDone', // выполнили норму, следующий день.
 } as const;
 
 export type GameState = ValuesOf<typeof GameStates>;
