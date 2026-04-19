@@ -114,6 +114,7 @@ export class GameScreen extends Container implements AppScreen {
     this.balance.dayTimeRemainingMs = this.dayTimer.getRemainingMs();
 
     // Видимые системы
+    this.background.updateFrame(deltaMs);
     this.visitor.update(deltaMs);
 
     // Логика стейта

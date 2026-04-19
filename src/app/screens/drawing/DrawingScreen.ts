@@ -6,16 +6,11 @@ import { Container, type FederatedPointerEvent, Graphics, Rectangle, Text, type 
 const CANVAS_W = 960;
 const CANVAS_H = 640;
 const BOARD_BG = 0xf5f5f5;
+/** Ластик при удержании: заметно на фоне листа; после отпускания печатается `BOARD_BG`. */
 const ERASER_LIVE_FILL = 0xc9ccd4;
 const ERASER_LIVE_FILL_ALPHA = 0.72;
 const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
-const BRUSH_DOT_STEP_MIN = 0.48;
-const BRUSH_DOT_STEP_FACTOR = 0.2;
-const BRUSH_TURN_COS_THRESH = 0.94;
-const BRUSH_TURN_STEP_SCALE = 0.35;
-const BRUSH_SMOOTH_NEIGHBOR = 0.26;
-const BRUSH_SMOOTH_PASSES = 2;
 
 const THICKNESS_PRESETS = [
   { r0: 2, r1: 4 },
@@ -75,6 +70,7 @@ export class DrawingScreen extends Container implements AppScreen {
 
   private board: Container;
   private bg: Graphics;
+  /** Один слой: кисть и ластик в порядке рисования, чтобы после стирания снова можно было рисовать сверху. */
   private inkStrokesLayer: Container;
   private placedTemplatesLayer: Container;
   private activeStroke: Graphics;
@@ -93,6 +89,7 @@ export class DrawingScreen extends Container implements AppScreen {
   private liveStrokeR1: number = THICKNESS_PRESETS[1].r1;
   private liveStrokeIsEraser = false;
   private strokeBakeAccum: Graphics | null = null;
+  /** Для ластика: до какого индекса в `strokePoints` уже запечено в `strokeBakeAccum` (не считая кончик). */
   private eraserNextBakeIndex = 0;
 
   private toolBrushBg!: Graphics;
@@ -782,35 +779,6 @@ export class DrawingScreen extends Container implements AppScreen {
     return this.liveStrokeR0 + (this.liveStrokeR1 - this.liveStrokeR0) * this.brushEase(u);
   }
 
-  private smoothBrushPolylineForDisplay(
-    pts: readonly { x: number; y: number; tSec: number }[],
-  ): { x: number; y: number; tSec: number }[] {
-    if (this.liveStrokeIsEraser || pts.length < 3) {
-      return pts.map((p) => ({ x: p.x, y: p.y, tSec: p.tSec }));
-    }
-    const a = BRUSH_SMOOTH_NEIGHBOR;
-    const c = 1 - 2 * a;
-    let cur = pts.map((p) => ({ x: p.x, y: p.y, tSec: p.tSec }));
-    for (let pass = 0; pass < BRUSH_SMOOTH_PASSES; pass++) {
-      const next = cur.map((_, i) => {
-        if (i === 0 || i === cur.length - 1) {
-          const p = cur[i]!;
-          return { x: p.x, y: p.y, tSec: p.tSec };
-        }
-        const pm = cur[i - 1]!;
-        const po = cur[i]!;
-        const pp = cur[i + 1]!;
-        return {
-          x: c * po.x + a * pm.x + a * pp.x,
-          y: c * po.y + a * pm.y + a * pp.y,
-          tSec: po.tSec,
-        };
-      });
-      cur = next;
-    }
-    return cur;
-  }
-
   private beginStroke(p: { x: number; y: number }) {
     const c = this.clampToBoard(p);
     this.lastHover = c;
@@ -842,52 +810,17 @@ export class DrawingScreen extends Container implements AppScreen {
     const nowMs = performance.now();
     const tNow = (nowMs - this.pressStartMs) / 1000;
     const rNow = this.brushRadiusAt(tNow);
-    let step = Math.max(BRUSH_DOT_STEP_MIN, rNow * BRUSH_DOT_STEP_FACTOR);
-    if (this.strokePoints.length >= 2) {
-      const p0 = this.strokePoints[this.strokePoints.length - 2]!;
-      const ax = last.x - p0.x;
-      const ay = last.y - p0.y;
-      const bx = x - last.x;
-      const by = y - last.y;
-      const la = Math.hypot(ax, ay);
-      const lb = Math.hypot(bx, by);
-      if (la > 0.4 && lb > 0.4) {
-        const cos = (ax * bx + ay * by) / (la * lb);
-        if (cos < BRUSH_TURN_COS_THRESH) {
-          step *= BRUSH_TURN_STEP_SCALE;
-        }
-      }
-    }
+    const step = Math.max(1.5, rNow * 0.42);
 
-    const minMove = Math.max(0.16, Math.min(step * 0.32, rNow * 0.1));
     const dx = x - last.x;
     const dy = y - last.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < minMove) return;
+    if (dist < Math.max(0.28, rNow * 0.14)) return;
 
     const nx = dx / dist;
     const ny = dy / dist;
 
     if (dist <= step) {
-      if (this.strokePoints.length >= 2 && dist > 0.22) {
-        const p0 = this.strokePoints[this.strokePoints.length - 2]!;
-        const ax = last.x - p0.x;
-        const ay = last.y - p0.y;
-        const bx = x - last.x;
-        const by = y - last.y;
-        const la = Math.hypot(ax, ay);
-        const lb = Math.hypot(bx, by);
-        if (la > 0.4 && lb > 0.4) {
-          const cos = (ax * bx + ay * by) / (la * lb);
-          if (cos < BRUSH_TURN_COS_THRESH) {
-            this.strokePoints.push({
-              x: last.x + nx * dist * 0.5,
-              y: last.y + ny * dist * 0.5,
-              tSec: tNow,
-            });
-          }
-        }
-      }
       this.strokePoints.push({ x, y, tSec: tNow });
     } else {
       let s = step;
@@ -932,9 +865,8 @@ export class DrawingScreen extends Container implements AppScreen {
       ? { color: BOARD_BG, alpha: 1 }
       : { color: 0x000000, alpha: 1 };
     if (!this.liveStrokeIsEraser) {
-      const display = this.smoothBrushPolylineForDisplay(this.strokePoints);
       for (let i = 0; i < nMove; i++) {
-        const p = display[i]!;
+        const p = this.strokePoints[i]!;
         const r = this.brushRadiusAt(p.tSec);
         this.strokeBakeAccum.circle(p.x, p.y, r).fill(ink);
       }
@@ -946,6 +878,7 @@ export class DrawingScreen extends Container implements AppScreen {
     this.strokePoints.splice(0, nMove);
   }
 
+  /** Запекает пройденный след ластика (кроме кончика у курсора) — сразу видно стирание. */
   private commitEraserBakedTrail() {
     if (!this.liveStrokeIsEraser || !this.strokeBakeAccum) return;
     const n = this.strokePoints.length;
@@ -1013,12 +946,10 @@ export class DrawingScreen extends Container implements AppScreen {
         .stroke({ width: 2, color: ERASER_LIVE_STROKE, alpha: 0.92 });
       return;
     }
-    const display = this.smoothBrushPolylineForDisplay(this.strokePoints);
-    const nd = display.length;
-    for (let i = 0; i < nd; i++) {
-      const p = display[i]!;
+    for (let i = 0; i < n; i++) {
+      const p = this.strokePoints[i]!;
       let r = this.brushRadiusAt(p.tSec);
-      if (i === nd - 1) {
+      if (i === n - 1) {
         r = Math.max(r, this.brushRadiusAt(nowSec));
       }
       this.activeStroke.circle(p.x, p.y, r).fill({ color: 0x0a0a0a, alpha: 0.96 });
@@ -1054,12 +985,10 @@ export class DrawingScreen extends Container implements AppScreen {
       this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, g);
     }
     const ink = { color: 0x000000, alpha: 1 };
-    const display = this.smoothBrushPolylineForDisplay(this.strokePoints);
-    const nd = display.length;
-    for (let i = 0; i < nd; i++) {
-      const p = display[i]!;
+    for (let i = 0; i < n; i++) {
+      const p = this.strokePoints[i]!;
       let r = this.brushRadiusAt(p.tSec);
-      if (i === nd - 1) {
+      if (i === n - 1) {
         r = Math.max(r, this.brushRadiusAt(nowSec));
       }
       g.circle(p.x, p.y, r).fill(ink);

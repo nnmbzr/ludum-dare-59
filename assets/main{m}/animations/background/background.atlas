@@ -1,0 +1,35 @@
+background.png
+size:4004,4004
+filter:Linear,Linear
+UI text
+bounds:2250,1593,1113,405
+offsets:1,1,1115,407
+background
+bounds:2,2000,4000,2002
+offsets:1,1,4002,2004
+button
+bounds:3027,1054,257,158
+offsets:1,1,259,160
+calendar
+bounds:1263,905,265,285
+offsets:1,1,267,287
+drawing tablet
+bounds:2,36,1209,861
+empty
+bounds:3365,1631,50,50
+paper
+bounds:3365,1683,486,315
+offsets:1,1,488,317
+printer
+bounds:1263,1192,985,806
+offsets:1,1,987,808
+stamp
+bounds:3027,1214,377,313
+offsets:1,1,379,315
+rotate:90
+timer
+bounds:2250,974,617,775
+offsets:1,1,619,777
+rotate:90
+tv right
+bounds:2,899,1259,1099
