@@ -1,7 +1,7 @@
 import type { GameState } from './types';
 
 export const HINTS_TEXTS: Record<GameState, string> = {
-  readyToStartDay: 'ЖДЁМ НАЧАЛА ДНЯ',
+  readyToStartDay: 'ПРИГОТОВЬТЕСЬ',
   waitingForVisitor: 'ОЖИДАЙТЕ',
   alarmOn: 'ПОЯВИЛСЯ СИГНАЛ',
   visitorOnCamera: 'СМОТРИ НА КАМЕРУ',
@@ -14,4 +14,5 @@ export const HINTS_TEXTS: Record<GameState, string> = {
   showGuessingResult: 'РЕЗУЛЬТАТ: %RESULT%', // можно будет просто заменить поиском по строке.
   dayEnded: 'ВРЕМЯ ВЫШЛО', // можно будет просто заменить поиском по строке.
   gameOver: '!!! СИГНАЛ ПОТЕРЯН !!!',
+  wellDone: 'ХОРОШАЯ РАБОТА',
 };
