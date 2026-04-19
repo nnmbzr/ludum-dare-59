@@ -1,8 +1,8 @@
 import { engine } from '@/app/getEngine';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, Graphics, Point, Rectangle, Text, type Ticker } from 'pixi.js';
+import type { SkinSet } from '../types';
 import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
-import type { SkinSet } from './types';
 const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
 

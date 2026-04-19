@@ -4,7 +4,7 @@ import { Spine } from '@esotericsoftware/spine-pixi-v8';
 import gsap from 'gsap';
 import { Container } from 'pixi.js';
 import { FisheyeFilter } from './FisheyeFilter';
-import { GameDrawingBoard } from './GameDrawingBoard';
+import { GameDrawingBoard } from './drawing/GameDrawingBoard';
 
 const DRAWING_PAD_BOARD_OFFSET_X = -228;
 const DRAWING_PAD_BOARD_OFFSET_Y = -302;

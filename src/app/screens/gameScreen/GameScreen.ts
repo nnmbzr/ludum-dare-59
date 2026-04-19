@@ -8,13 +8,13 @@ import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background, BACKGROUND_SLOTS } from './Background';
 import { Balance } from './Balance';
-import { DayTimer } from './DayTimer';
-import { GameDrawingBoard } from './GameDrawingBoard';
-import { Guessing } from './Guessing';
+import { BigTV } from './bigTV/BigTV';
+import { DayTimer } from './dayTimer/DayTimer';
+import { GameDrawingBoard } from './drawing/GameDrawingBoard';
+import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
 import { GameStates, type GameState, type GuessTarget, type SkinSet } from './types';
-import { BigMonitor } from './visitors/BigMonitor';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -33,7 +33,7 @@ export class GameScreen extends Container implements AppScreen {
   // === Systems / visuals ===
   private balance: Balance;
   private server: Server;
-  private bigMonitor: BigMonitor;
+  private bigTV: BigTV;
   private drawing: GameDrawingBoard;
   private guessing: Guessing;
   private dayTimer: DayTimer;
@@ -58,16 +58,19 @@ export class GameScreen extends Container implements AppScreen {
     // Игровые объекты
     this.background = new Background();
 
-    this.bigMonitor = new BigMonitor(this.balance);
-    this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigMonitor.getTVSpine());
+    this.bigTV = new BigTV(this.balance);
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigTV.getTVSpine());
 
     this.drawing = new GameDrawingBoard();
+
     this.guessing = new Guessing(this.balance);
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.FAX, this.guessing.getFaxSpine());
+
     this.dayTimer = new DayTimer();
     this.hintPanel = new HintPanel();
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
-    this.mainContainer.addChild(this.background, this.bigMonitor, this.guessing, this.dayTimer, this.hintPanel);
+    this.mainContainer.addChild(this.background, this.bigTV, this.guessing, this.dayTimer, this.hintPanel);
     this.background.mountDrawingBoard(this.drawing);
 
     this.wireCallbacks();
@@ -75,7 +78,7 @@ export class GameScreen extends Container implements AppScreen {
 
   /** Проводки между системами.. */
   private wireCallbacks(): void {
-    this.bigMonitor.onVisitorLeft = () => this.handleVisitorLeft();
+    this.bigTV.onVisitorLeft = () => this.handleVisitorLeft();
 
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
@@ -125,7 +128,8 @@ export class GameScreen extends Container implements AppScreen {
     this.drawing.tick(time);
 
     // FIXME: Syncronyze all dt!
-    this.bigMonitor.update(dt);
+    this.bigTV.update(dt);
+    this.guessing.update(dt);
 
     // Логика стейта
     this.tickState(deltaMs);
@@ -184,7 +188,7 @@ export class GameScreen extends Container implements AppScreen {
     if (this.spawnDelayMs > 0) {
       this.spawnDelayMs -= deltaMs;
       if (this.spawnDelayMs <= 0) {
-        this.bigMonitor.triggerAlarm();
+        this.bigTV.triggerAlarm();
         // FIXME: сейчас мы считаем прямо тут, внутри. Вместо этого нужно перенести логику старта и расчёта задержки в visitor
         // this.setState(GameStates.alarmOn);
       }
@@ -261,17 +265,17 @@ export class GameScreen extends Container implements AppScreen {
 
         // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
         // +++ Загорается лампочка на правом мониторе.
-        this.bigMonitor.triggerAlarm();
+        this.bigTV.triggerAlarm();
         // Возможно что-то происходит с экраном.
 
         // Кнопка становится доступна для клика.
         // FIXME: тестово делаем по ней "клик". Нужно будет выпилить и реализовать через кнопку!!!
         setTimeout(() => {
-          this.bigMonitor.onCameraButtonPressed();
+          this.bigTV.onCameraButtonPressed();
           console.log('Кнопка на камере нажата!');
         }, 2000);
         // Ждём пока пользователь не кликнет по кнопке камеры.
-        await this.bigMonitor.waitForCameraButtonPress();
+        await this.bigTV.waitForCameraButtonPress();
 
         // Переходим на следующий стейт
         nextState = GameStates.visitorOnCamera;
@@ -290,7 +294,7 @@ export class GameScreen extends Container implements AppScreen {
 
         // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
         // Показываем посетителя на камере
-        this.bigMonitor.showVisitorOnCamera();
+        this.bigTV.showVisitorOnCamera();
         // Возможно отбираем в этот момент управление? (ЭКСПЕРИМЕНТАЛЬНО)
         // По идее, в этот-же момент должна включиться анимация вылезания папки.
         // Уменьшаем каунтер папок.
@@ -343,7 +347,7 @@ export class GameScreen extends Container implements AppScreen {
         // После этого запускается анимация закрытия и ухода папки.
         // Увеличивается счётчик обслуженных посетителей.
         // ++++ Камера гаснет (если посетитель уже на камере, то потом просто скрываем его).
-        this.bigMonitor.turnOffCamera();
+        this.bigTV.turnOffCamera();
         // Сейчас просто эмулируем все эти анимации
         await waitFor(3);
 

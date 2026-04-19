@@ -13,7 +13,7 @@ import { VisitorManController } from './VisitorManController';
  *
  * Логика появления (когда и какого) — снаружи, из GameScreen.
  */
-export class BigMonitor extends Container {
+export class BigTV extends Container {
   private currentVisitor: VisitorData | null = null;
   private stayTimerSec = 0;
   private gameBalance: Balance;

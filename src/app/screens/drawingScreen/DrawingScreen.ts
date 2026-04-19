@@ -1,8 +1,8 @@
+import { GameDrawingBoard } from '@/app/screens/gameScreen/drawing/GameDrawingBoard';
 import type { AppScreen } from '@/engine/navigation/navigation';
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@/main';
 import gsap from 'gsap';
 import { Container, type Ticker } from 'pixi.js';
-import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@/main';
-import { GameDrawingBoard } from '@/app/screens/gameScreen/GameDrawingBoard';
 
 export class DrawingScreen extends Container implements AppScreen {
   public static assetBundles = ['main'];

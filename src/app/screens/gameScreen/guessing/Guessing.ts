@@ -1,6 +1,7 @@
-import { Container, type Sprite } from 'pixi.js';
-import { type Balance } from './Balance';
-import { type GuessTarget, type SkinSet } from './types';
+import { Container } from 'pixi.js';
+import { type Balance } from '../Balance';
+import { type GuessTarget, type SkinSet } from '../types';
+import { FaxController } from './FaxController';
 
 /**
  * Факс + три верхних монитора.
@@ -10,10 +11,6 @@ import { type GuessTarget, type SkinSet } from './types';
  * Возвращает результат угадывания наружу.
  */
 export class Guessing extends Container {
-  // TODO: не забыть при внедрении отказаться от чёртовых "!" Нужно будет явно их определить.
-  private faxButton!: Sprite;
-  private faxSheet!: Sprite; // куда выезжает чужой фоторобот
-  private monitors: [Sprite, Sprite, Sprite] = [null!, null!, null!];
   private correctMonitorIndex = -1;
   private currentTarget: GuessTarget | null = null;
   private faxEnabled = false;
@@ -32,10 +29,14 @@ export class Guessing extends Container {
   private guessButtonPressPromise: Promise<void> | null = null;
   private resolveGuessButtonPress: (() => void) | null = null;
 
+  private faxSpine: FaxController;
+
   constructor(balance: Balance) {
     super();
 
     this.balance = balance;
+
+    this.faxSpine = new FaxController();
 
     // TODO:
     // - создать faxButton (Sprite, interactive), привязать к handleFaxClick
@@ -137,5 +138,13 @@ export class Guessing extends Container {
     this.resolveGuessButtonPress();
     this.resolveGuessButtonPress = null;
     this.guessButtonPressPromise = null;
+  }
+
+  public update(dt: number): void {
+    this.faxSpine.update(dt);
+  }
+
+  public getFaxSpine(): FaxController {
+    return this.faxSpine;
   }
 }

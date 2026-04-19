@@ -9,12 +9,14 @@ import type { Container } from 'pixi.js';
  * Перечисление анимаций персонажа TV
  */
 export const TvAnimation = {
-  ALARM: 'alarm_on',
+  ALARM_ON: 'alarm_on',
+  ALARM_OFF: 'alarm_off',
 } as const;
 type TvAnimation = ValuesOf<typeof TvAnimation>;
 
 export const TvSlots = {
   PORTRAITS: 'Container_Portraits',
+  BUTTON: 'Container_Button',
 } as const;
 type TvSlots = ValuesOf<typeof TvSlots>;
 
@@ -35,7 +37,7 @@ export class TVController extends SpineObjectController {
     this.state.data.defaultMix = 0.2;
 
     // Устанавливаем начальную анимацию
-    this.state.setEmptyAnimation(0);
+    this.state.setAnimation(0, TvAnimation.ALARM_OFF, false);
     this.spine.scale.set(1);
 
     this.isShowing = false;
@@ -43,11 +45,11 @@ export class TVController extends SpineObjectController {
 
   public playAlarm(): void {
     this.isShowing = true;
-    this.play(TvAnimation.ALARM, true, 0);
+    this.play(TvAnimation.ALARM_ON, true, 0);
   }
 
   public stopAlarm() {
-    this.state.setEmptyAnimation(0);
+    this.state.setAnimation(0, TvAnimation.ALARM_OFF, false);
   }
 
   public addVisitorToSlot(slot: TvSlots, visitor: Container): void {
