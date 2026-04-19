@@ -6,6 +6,10 @@ import { Container, type FederatedPointerEvent, Graphics, Rectangle, Text, type 
 const CANVAS_W = 960;
 const CANVAS_H = 640;
 const BOARD_BG = 0xf5f5f5;
+/** Ластик при удержании: заметно на фоне листа; после отпускания печатается `BOARD_BG`. */
+const ERASER_LIVE_FILL = 0xc9ccd4;
+const ERASER_LIVE_FILL_ALPHA = 0.72;
+const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
 
 const THICKNESS_PRESETS = [
@@ -66,11 +70,10 @@ export class DrawingScreen extends Container implements AppScreen {
 
   private board: Container;
   private bg: Graphics;
-  private brushStrokesLayer: Container;
+  /** Один слой: кисть и ластик в порядке рисования, чтобы после стирания снова можно было рисовать сверху. */
+  private inkStrokesLayer: Container;
   private placedTemplatesLayer: Container;
-  private eraserStrokesLayer: Container;
-  private activeLine: Graphics;
-  private activeEraserLine: Graphics;
+  private activeStroke: Graphics;
   private hoverDot: Graphics;
   private boardHolstMask: Graphics;
   private uiDock!: Container;
@@ -86,6 +89,8 @@ export class DrawingScreen extends Container implements AppScreen {
   private liveStrokeR1: number = THICKNESS_PRESETS[1].r1;
   private liveStrokeIsEraser = false;
   private strokeBakeAccum: Graphics | null = null;
+  /** Для ластика: до какого индекса в `strokePoints` уже запечено в `strokeBakeAccum` (не считая кончик). */
+  private eraserNextBakeIndex = 0;
 
   private toolBrushBg!: Graphics;
   private toolEraserBg!: Graphics;
@@ -167,6 +172,7 @@ export class DrawingScreen extends Container implements AppScreen {
   private readonly onStageMove = (e: FederatedPointerEvent) => {
     if (!this.isDrawing) return;
     const p = this.clampToBoard(this.localOnBoard(e));
+    this.lastHover = p;
     this.appendStrokePoint(p.x, p.y);
   };
   private readonly onStageUp = (_e: FederatedPointerEvent) => {
@@ -194,30 +200,20 @@ export class DrawingScreen extends Container implements AppScreen {
       .stroke({ width: 2, color: 0x333333, alpha: 1 });
     this.board.addChild(this.bg);
 
-    this.brushStrokesLayer = new Container();
-    this.brushStrokesLayer.label = 'drawing_brush_strokes';
-    this.brushStrokesLayer.eventMode = 'none';
-    this.board.addChild(this.brushStrokesLayer);
-
-    this.activeLine = new Graphics();
-    this.activeLine.label = 'drawing_lines_active';
-    this.activeLine.eventMode = 'none';
-    this.brushStrokesLayer.addChild(this.activeLine);
-
     this.placedTemplatesLayer = new Container();
     this.placedTemplatesLayer.label = 'drawing_placed_templates';
     this.placedTemplatesLayer.eventMode = 'none';
     this.board.addChild(this.placedTemplatesLayer);
 
-    this.eraserStrokesLayer = new Container();
-    this.eraserStrokesLayer.label = 'drawing_eraser_strokes';
-    this.eraserStrokesLayer.eventMode = 'none';
-    this.board.addChild(this.eraserStrokesLayer);
+    this.inkStrokesLayer = new Container();
+    this.inkStrokesLayer.label = 'drawing_ink_strokes';
+    this.inkStrokesLayer.eventMode = 'none';
+    this.board.addChild(this.inkStrokesLayer);
 
-    this.activeEraserLine = new Graphics();
-    this.activeEraserLine.label = 'drawing_eraser_active';
-    this.activeEraserLine.eventMode = 'none';
-    this.eraserStrokesLayer.addChild(this.activeEraserLine);
+    this.activeStroke = new Graphics();
+    this.activeStroke.label = 'drawing_stroke_active';
+    this.activeStroke.eventMode = 'none';
+    this.inkStrokesLayer.addChild(this.activeStroke);
 
     this.hoverDot = new Graphics();
     this.hoverDot.eventMode = 'none';
@@ -733,13 +729,8 @@ export class DrawingScreen extends Container implements AppScreen {
     this.hideUiDockInstant();
     this.board.off('pointerdown', this.onBoardDown);
     this.strokeChunks.length = 0;
-    for (const ch of [...this.brushStrokesLayer.children]) {
-      if (ch !== this.activeLine) {
-        (ch as Graphics).destroy({ children: true });
-      }
-    }
-    for (const ch of [...this.eraserStrokesLayer.children]) {
-      if (ch !== this.activeEraserLine) {
+    for (const ch of [...this.inkStrokesLayer.children]) {
+      if (ch !== this.activeStroke) {
         (ch as Graphics).destroy({ children: true });
       }
     }
@@ -751,13 +742,13 @@ export class DrawingScreen extends Container implements AppScreen {
     for (let c = 0; c < TEMPLATE_CATALOG.length; c++) {
       this.refreshTemplateRowPreview(c);
     }
-    this.activeLine.clear();
-    this.activeEraserLine.clear();
+    this.activeStroke.clear();
     this.strokePoints.length = 0;
     this.hideHoverDot();
     this.pointerOverBoard = false;
     this.drawTool = 'brush';
     this.thicknessIx = 1;
+    this.eraserNextBakeIndex = 0;
     this.refreshToolChrome();
   }
 
@@ -783,23 +774,30 @@ export class DrawingScreen extends Container implements AppScreen {
   }
 
   private brushRadiusAt(elapsedSec: number): number {
+    if (this.liveStrokeIsEraser) return this.liveStrokeR1;
     const u = Math.min(1, elapsedSec / BRUSH_GROW_SEC);
     return this.liveStrokeR0 + (this.liveStrokeR1 - this.liveStrokeR0) * this.brushEase(u);
   }
 
   private beginStroke(p: { x: number; y: number }) {
     const c = this.clampToBoard(p);
+    this.lastHover = c;
     const pr = THICKNESS_PRESETS[this.thicknessIx]!;
     this.liveStrokeR0 = pr.r0;
     this.liveStrokeR1 = pr.r1;
     this.liveStrokeIsEraser = this.drawTool === 'eraser';
-    this.strokeBakeAccum = null;
+    this.eraserNextBakeIndex = 0;
+    if (this.liveStrokeIsEraser) {
+      this.strokeBakeAccum = new Graphics();
+      this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, this.strokeBakeAccum);
+    } else {
+      this.strokeBakeAccum = null;
+    }
     this.pressStartMs = performance.now();
     this.isDrawing = true;
     this.strokePoints.length = 0;
     this.strokePoints.push({ x: c.x, y: c.y, tSec: 0 });
-    this.activeLine.clear();
-    this.activeEraserLine.clear();
+    this.activeStroke.clear();
     this.redrawActiveBrush();
     this.hideHoverDot();
     this.attachStageDrag();
@@ -839,6 +837,7 @@ export class DrawingScreen extends Container implements AppScreen {
       }
       this.strokePoints.push({ x, y, tSec: (performance.now() - this.pressStartMs) / 1000 });
     }
+    this.commitEraserBakedTrail();
     this.maybeFlushStrokePointBudget();
     this.redrawActiveBrush();
   }
@@ -848,8 +847,7 @@ export class DrawingScreen extends Container implements AppScreen {
     this.bakeStrokeToFinished();
     this.isDrawing = false;
     this.strokePoints.length = 0;
-    this.activeLine.clear();
-    this.activeEraserLine.clear();
+    this.activeStroke.clear();
     this.detachStageDrag();
     if (this.pointerOverBoard) this.refreshHoverDot();
     else this.hideHoverDot();
@@ -861,24 +859,40 @@ export class DrawingScreen extends Container implements AppScreen {
     if (nMove <= 0) return;
     if (!this.strokeBakeAccum) {
       this.strokeBakeAccum = new Graphics();
-      if (this.liveStrokeIsEraser) {
-        this.addStrokeChunkBeforeActive(this.eraserStrokesLayer, this.activeEraserLine, this.strokeBakeAccum);
-      } else {
-        this.addStrokeChunkBeforeActive(this.brushStrokesLayer, this.activeLine, this.strokeBakeAccum);
-      }
+      this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, this.strokeBakeAccum);
     }
     const ink = this.liveStrokeIsEraser
       ? { color: BOARD_BG, alpha: 1 }
       : { color: 0x000000, alpha: 1 };
-    for (let i = 0; i < nMove; i++) {
+    if (!this.liveStrokeIsEraser) {
+      for (let i = 0; i < nMove; i++) {
+        const p = this.strokePoints[i]!;
+        const r = this.brushRadiusAt(p.tSec);
+        this.strokeBakeAccum.circle(p.x, p.y, r).fill(ink);
+      }
+    }
+    if (this.liveStrokeIsEraser) {
+      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints.slice(0, nMove));
+      this.eraserNextBakeIndex = Math.max(0, this.eraserNextBakeIndex - nMove);
+    }
+    this.strokePoints.splice(0, nMove);
+  }
+
+  /** Запекает пройденный след ластика (кроме кончика у курсора) — сразу видно стирание. */
+  private commitEraserBakedTrail() {
+    if (!this.liveStrokeIsEraser || !this.strokeBakeAccum) return;
+    const n = this.strokePoints.length;
+    const from = this.eraserNextBakeIndex;
+    const uptoExcl = n - 1;
+    if (from >= uptoExcl) return;
+    const ink = { color: BOARD_BG, alpha: 1 };
+    for (let i = from; i < uptoExcl; i++) {
       const p = this.strokePoints[i]!;
       const r = this.brushRadiusAt(p.tSec);
       this.strokeBakeAccum.circle(p.x, p.y, r).fill(ink);
     }
-    if (this.liveStrokeIsEraser) {
-      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints.slice(0, nMove));
-    }
-    this.strokePoints.splice(0, nMove);
+    this.removePlacedTemplatesHitByStrokePoints(this.strokePoints.slice(from, uptoExcl));
+    this.eraserNextBakeIndex = uptoExcl;
   }
 
   private removePlacedTemplatesHitByStrokePoints(
@@ -919,22 +933,26 @@ export class DrawingScreen extends Container implements AppScreen {
   }
 
   private redrawActiveBrush() {
-    const target = this.liveStrokeIsEraser ? this.activeEraserLine : this.activeLine;
-    this.activeLine.clear();
-    this.activeEraserLine.clear();
+    this.activeStroke.clear();
     const n = this.strokePoints.length;
     if (n === 0) return;
     const nowSec = (performance.now() - this.pressStartMs) / 1000;
+    if (this.liveStrokeIsEraser) {
+      const p = this.strokePoints[n - 1]!;
+      const r = this.liveStrokeR1;
+      this.activeStroke
+        .circle(p.x, p.y, r)
+        .fill({ color: ERASER_LIVE_FILL, alpha: ERASER_LIVE_FILL_ALPHA })
+        .stroke({ width: 2, color: ERASER_LIVE_STROKE, alpha: 0.92 });
+      return;
+    }
     for (let i = 0; i < n; i++) {
       const p = this.strokePoints[i]!;
       let r = this.brushRadiusAt(p.tSec);
       if (i === n - 1) {
         r = Math.max(r, this.brushRadiusAt(nowSec));
       }
-      const ink = this.liveStrokeIsEraser
-        ? { color: BOARD_BG, alpha: 0.98 }
-        : { color: 0x0a0a0a, alpha: 0.96 };
-      target.circle(p.x, p.y, r).fill(ink);
+      this.activeStroke.circle(p.x, p.y, r).fill({ color: 0x0a0a0a, alpha: 0.96 });
     }
   }
 
@@ -942,17 +960,31 @@ export class DrawingScreen extends Container implements AppScreen {
     const n = this.strokePoints.length;
     if (n === 0) return;
     const nowSec = (performance.now() - this.pressStartMs) / 1000;
+    if (this.liveStrokeIsEraser) {
+      const g = this.strokeBakeAccum ?? new Graphics();
+      if (!this.strokeBakeAccum) {
+        this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, g);
+      }
+      const ink = { color: BOARD_BG, alpha: 1 };
+      for (let i = this.eraserNextBakeIndex; i < n; i++) {
+        const p = this.strokePoints[i]!;
+        let r = this.brushRadiusAt(p.tSec);
+        if (i === n - 1) {
+          r = Math.max(r, this.brushRadiusAt(nowSec));
+        }
+        g.circle(p.x, p.y, r).fill(ink);
+      }
+      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints, nowSec);
+      this.strokeChunks.push(g);
+      this.strokeBakeAccum = null;
+      this.eraserNextBakeIndex = 0;
+      return;
+    }
     const g = this.strokeBakeAccum ?? new Graphics();
     if (!this.strokeBakeAccum) {
-      if (this.liveStrokeIsEraser) {
-        this.addStrokeChunkBeforeActive(this.eraserStrokesLayer, this.activeEraserLine, g);
-      } else {
-        this.addStrokeChunkBeforeActive(this.brushStrokesLayer, this.activeLine, g);
-      }
+      this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, g);
     }
-    const ink = this.liveStrokeIsEraser
-      ? { color: BOARD_BG, alpha: 1 }
-      : { color: 0x000000, alpha: 1 };
+    const ink = { color: 0x000000, alpha: 1 };
     for (let i = 0; i < n; i++) {
       const p = this.strokePoints[i]!;
       let r = this.brushRadiusAt(p.tSec);
@@ -960,9 +992,6 @@ export class DrawingScreen extends Container implements AppScreen {
         r = Math.max(r, this.brushRadiusAt(nowSec));
       }
       g.circle(p.x, p.y, r).fill(ink);
-    }
-    if (this.liveStrokeIsEraser) {
-      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints, nowSec);
     }
     this.strokeChunks.push(g);
     this.strokeBakeAccum = null;
@@ -974,9 +1003,9 @@ export class DrawingScreen extends Container implements AppScreen {
     this.hoverDot.clear();
     if (this.drawTool === 'eraser') {
       this.hoverDot
-        .circle(c.x, c.y, pr.r0)
-        .fill({ color: BOARD_BG, alpha: 0.95 })
-        .stroke({ width: 2, color: 0x888888, alpha: 0.85 });
+        .circle(c.x, c.y, pr.r1)
+        .fill({ color: ERASER_LIVE_FILL, alpha: ERASER_LIVE_FILL_ALPHA })
+        .stroke({ width: 2, color: ERASER_LIVE_STROKE, alpha: 0.9 });
     } else {
       this.hoverDot
         .circle(c.x, c.y, pr.r0)
