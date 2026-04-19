@@ -1,14 +1,6 @@
 import { engine } from '@/app/getEngine';
 import gsap from 'gsap';
-import {
-  Container,
-  type FederatedPointerEvent,
-  Graphics,
-  Point,
-  Rectangle,
-  Text,
-  type Ticker,
-} from 'pixi.js';
+import { Container, type FederatedPointerEvent, Graphics, Point, Rectangle, Text, type Ticker } from 'pixi.js';
 import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
 import type { SkinSet } from './types';
 const ERASER_LIVE_STROKE = 0x4a4a55;
@@ -178,6 +170,14 @@ export class GameDrawingBoard extends Container {
   private readonly onStageUp = (_e: FederatedPointerEvent) => {
     this.endStroke();
   };
+
+  // Ожидание первого взаимодействие с рисованием
+  private cameraButtonPressPromise: Promise<void> | null = null;
+  private resolveCameraButtonPress: (() => void) | null = null;
+
+  // Ожидание нажатия на кнопку штампа
+  private stampButtonPressPromise: Promise<void> | null = null;
+  private resolveStampButtonPress: (() => void) | null = null;
 
   constructor() {
     super();
@@ -728,6 +728,47 @@ export class GameDrawingBoard extends Container {
     this.board.scale.set(1, 1);
   }
 
+  // Этот метод дожидается, пока игрок не провзаимодействует с рисованием.
+  // Вызывается из стейтмашины.
+  public waitForUserFirstInteractWithDrawing(): Promise<void> {
+    if (!this.cameraButtonPressPromise) {
+      this.cameraButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveCameraButtonPress = resolve;
+      });
+    }
+
+    return this.cameraButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
+  public onDrawingFirstInteraction(): void {
+    if (!this.resolveCameraButtonPress) return;
+
+    this.resolveCameraButtonPress();
+    this.resolveCameraButtonPress = null;
+    this.cameraButtonPressPromise = null;
+  }
+
+  // Этот метод дожидается, пока игрок не нажмёт на кнопку подтверждения рисования.
+  // Вызывается из стейтмашины.
+  public waitForStampButtonPress(): Promise<void> {
+    if (!this.stampButtonPressPromise) {
+      this.stampButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveStampButtonPress = resolve;
+      });
+    }
+    return this.stampButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
+  public onStampButtonPressed(): void {
+    if (!this.resolveStampButtonPress) return;
+
+    this.resolveStampButtonPress();
+    this.resolveStampButtonPress = null;
+    this.stampButtonPressPromise = null;
+  }
+
   public reset() {
     this.detachStageDrag();
     this.detachCanvasHolstPointer();
@@ -868,9 +909,7 @@ export class GameDrawingBoard extends Container {
       this.strokeBakeAccum = new Graphics();
       this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, this.strokeBakeAccum);
     }
-    const ink = this.liveStrokeIsEraser
-      ? { color: BOARD_BG, alpha: 1 }
-      : { color: 0x000000, alpha: 1 };
+    const ink = this.liveStrokeIsEraser ? { color: BOARD_BG, alpha: 1 } : { color: 0x000000, alpha: 1 };
     if (!this.liveStrokeIsEraser) {
       for (let i = 0; i < nMove; i++) {
         const p = this.strokePoints[i]!;
@@ -1193,21 +1232,41 @@ function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
     case 'cloud_storm': {
       const r0 = size * 0.14;
       const fill = { color: 0x78909c, alpha: 0.95 };
-      g.circle(cx - size * 0.18, cy, r0 * 1.1).fill(fill).stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25).fill(fill).stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05).fill(fill).stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0).fill(fill).stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95).fill(fill).stroke(stroke);
+      g.circle(cx - size * 0.18, cy, r0 * 1.1)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx + size * 0.18, cy, r0 * 1.05)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
+        .fill(fill)
+        .stroke(stroke);
       break;
     }
     case 'cloud_candy': {
       const r0 = size * 0.14;
       const fill = { color: 0xf8bbd0, alpha: 0.95 };
-      g.circle(cx - size * 0.18, cy, r0 * 1.1).fill(fill).stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25).fill(fill).stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05).fill(fill).stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0).fill(fill).stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95).fill(fill).stroke(stroke);
+      g.circle(cx - size * 0.18, cy, r0 * 1.1)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx + size * 0.18, cy, r0 * 1.05)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
+        .fill(fill)
+        .stroke(stroke);
+      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
+        .fill(fill)
+        .stroke(stroke);
       break;
     }
     default:
