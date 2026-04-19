@@ -16,6 +16,12 @@ export const SCREEN_HEIGHT = 1080;
 export const MAX_DT = 0.032; // 30 fps cap
 
 (async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((window as any).USED_DEV_CONSOLE) {
+    console.log('[DevConsole] Waiting 1 second for console to initialize...');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
   // Create a new creation engine instance
   const engine = new CreationEngine();
   setEngine(engine);
@@ -57,6 +63,12 @@ export const MAX_DT = 0.032; // 30 fps cap
 
   // Show the load screen first and then start game
   await engine.navigation.showScreen(LoadScreen);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((window as any).USED_DEV_CONSOLE && (window as any).UNREGISTER_DEV_CONSOLE_SW) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (window as any).UNREGISTER_DEV_CONSOLE_SW();
+  }
 
   if (DEBUG_START_SCREEN) {
     await engine.navigation.showScreen(getAppScreenByName(DEBUG_START_SCREEN));
