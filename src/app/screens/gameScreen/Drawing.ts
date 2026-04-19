@@ -36,6 +36,14 @@ export class Drawing extends Container {
   /** Этот класс должен самостоятельно его отскейлить, перевести в base64, оптимизировать и просто передать для отправки на сервер */
   public onSubmitted: (data: string, originalSkins: SkinSet) => void = () => {};
 
+  // Ожидание первого взаимодействие с рисованием
+  private cameraButtonPressPromise: Promise<void> | null = null;
+  private resolveCameraButtonPress: (() => void) | null = null;
+
+  // Ожидание нажатия на кнопку штампа
+  private stampButtonPressPromise: Promise<void> | null = null;
+  private resolveStampButtonPress: (() => void) | null = null;
+
   constructor() {
     super();
     this.canvas = new Container();
@@ -111,5 +119,46 @@ export class Drawing extends Container {
   /** Геттер для GameScreen, чтобы знать, можно ли сейчас рисовать */
   public getCanvas(): Container {
     return this.canvas;
+  }
+
+  // Этот метод дожидается, пока игрок не провзаимодействует с рисованием.
+  // Вызывается из стейтмашины.
+  public waitForUserFirstInteractWithDrawing(): Promise<void> {
+    if (!this.cameraButtonPressPromise) {
+      this.cameraButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveCameraButtonPress = resolve;
+      });
+    }
+
+    return this.cameraButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
+  public onDrawingFirstInteraction(): void {
+    if (!this.resolveCameraButtonPress) return;
+
+    this.resolveCameraButtonPress();
+    this.resolveCameraButtonPress = null;
+    this.cameraButtonPressPromise = null;
+  }
+
+  // Этот метод дожидается, пока игрок не нажмёт на кнопку подтверждения рисования.
+  // Вызывается из стейтмашины.
+  public waitForStampButtonPress(): Promise<void> {
+    if (!this.stampButtonPressPromise) {
+      this.stampButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveStampButtonPress = resolve;
+      });
+    }
+    return this.stampButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
+  public onStampButtonPressed(): void {
+    if (!this.resolveStampButtonPress) return;
+
+    this.resolveStampButtonPress();
+    this.resolveStampButtonPress = null;
+    this.stampButtonPressPromise = null;
   }
 }

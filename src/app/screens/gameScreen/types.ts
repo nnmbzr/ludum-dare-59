@@ -27,6 +27,7 @@ export interface GuessTarget {
 
 /** Макро-состояние экрана. Управляет флоу дня. */
 export const GameStates = {
+  GAME_RESET: 'GAME_RESET', // ждём следующего посетителя
   readyToStartDay: 'readyToStartDay', // ждём следующего посетителя
   waitingForVisitor: 'waitingForVisitor', // ждём следующего посетителя
   alarmOn: 'alarmOn', // лампочка горит, ждём клик по кнопке камеры
@@ -35,6 +36,7 @@ export const GameStates = {
   readyToAccept: 'readyToAccept', // Ждём когда пользователь подтвердит, что фоторобот готов.
   decideWhatNext: 'decideWhatNext', // решаем что делать дальше - перейти на waitingForVisitor или на outOfPaper
   outOfPaper: 'outOfPaper', // бумага закончилась, ждём клика по факсу
+  waitForServerResponse: 'waitForServerResponse', // ждём ответа от сервера
   showPhotophil: 'showPhotophil', // показываем фоторобот
   guessing: 'guessing', // пользователь угадывает
   showGuessingResult: 'showGuessingResult', // показываем результат угадывания

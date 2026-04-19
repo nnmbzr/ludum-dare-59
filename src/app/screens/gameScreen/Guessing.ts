@@ -24,6 +24,14 @@ export class Guessing extends Container {
   public onFaxRequested: () => void = () => {};
   public onGuessMade: (correct: boolean, targetAuthor: string) => void = () => {};
 
+  // Ожидание нажатия на кнопку факса
+  private faxButtonPressPromise: Promise<void> | null = null;
+  private resolveFaxButtonPress: (() => void) | null = null;
+
+  // Ожидание выбора подозреваемого
+  private guessButtonPressPromise: Promise<void> | null = null;
+  private resolveGuessButtonPress: (() => void) | null = null;
+
   constructor(balance: Balance) {
     super();
 
@@ -89,5 +97,45 @@ export class Guessing extends Container {
     // TODO: анимация ухода всего обратно в "покой", сброс currentTarget
     this.currentTarget = null;
     this.correctMonitorIndex = -1;
+  }
+
+  // Этот метод дожидается, пока игрок не нажмёт на кнопку факса.
+  // Вызывается из стейтмашины.
+  public waitForFaxButtonPress(): Promise<void> {
+    if (!this.faxButtonPressPromise) {
+      this.faxButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveFaxButtonPress = resolve;
+      });
+    }
+    return this.faxButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
+  public onFaxButtonPressed(): void {
+    if (!this.resolveFaxButtonPress) return;
+
+    this.resolveFaxButtonPress();
+    this.resolveFaxButtonPress = null;
+    this.faxButtonPressPromise = null;
+  }
+
+  // Этот метод дожидается, пока игрок не выберет подозреваемого.
+  // Вызывается из стейтмашины.
+  public waitForGuessButtonPress(): Promise<void> {
+    if (!this.guessButtonPressPromise) {
+      this.guessButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveGuessButtonPress = resolve;
+      });
+    }
+    return this.guessButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего вызова функции взаимодействия с мониторами.
+  public onGuessButtonPressed(): void {
+    if (!this.resolveGuessButtonPress) return;
+
+    this.resolveGuessButtonPress();
+    this.resolveGuessButtonPress = null;
+    this.guessButtonPressPromise = null;
   }
 }

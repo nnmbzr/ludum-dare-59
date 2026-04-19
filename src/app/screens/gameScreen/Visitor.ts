@@ -14,16 +14,19 @@ import { type VisitorData } from './types';
 export class Visitor extends Container {
   private currentVisitor: VisitorData | null = null;
   private stayTimerMs = 0;
-  private balance: Balance;
+  private gameBalance: Balance;
+
+  // Ожидание нажатия кнопки камеры: создается в waitForCameraButtonPress и резолвится в onCameraButtonPressed.
+  private cameraButtonPressPromise: Promise<void> | null = null;
+  private resolveCameraButtonPress: (() => void) | null = null;
 
   /** Коллбэки наружу. Назначаются из GameScreen при инициализации. */
-  public onCameraButtonPressed: () => void = () => {};
   public onVisitorLeft: () => void = () => {};
 
   constructor(balance: Balance) {
     super();
 
-    this.balance = balance;
+    this.gameBalance = balance;
 
     // TODO:
     // - создать Spine-объект с пустым набором скинов
@@ -40,6 +43,27 @@ export class Visitor extends Container {
   public triggerAlarm(): void {
     this.currentVisitor = this.generateVisitor();
     // TODO: включить мигание лампочки
+  }
+
+  // Этот метод дожидается, пока игрок не нажмёт кнопку камеры.
+  // Вызывается из стейтмашины.
+  public waitForCameraButtonPress(): Promise<void> {
+    if (!this.cameraButtonPressPromise) {
+      this.cameraButtonPressPromise = new Promise<void>((resolve) => {
+        this.resolveCameraButtonPress = resolve;
+      });
+    }
+
+    return this.cameraButtonPressPromise;
+  }
+
+  // FIXME: Временная заглушка для будущего callback интерактивной кнопки.
+  public onCameraButtonPressed(): void {
+    if (!this.resolveCameraButtonPress) return;
+
+    this.resolveCameraButtonPress();
+    this.resolveCameraButtonPress = null;
+    this.cameraButtonPressPromise = null;
   }
 
   /** Игрок нажал кнопку камеры — анимация показа посетителя */
@@ -78,6 +102,18 @@ export class Visitor extends Container {
     // - для каждого patternId выбрать случайный skinId
     // - собрать SkinSet
     // - вернуть VisitorData
-    throw new Error('Not implemented');
+    console.warn('Visitor generation not implemented, returning fallback visitor !!!');
+    return {
+      stayMs: 5000,
+      skins: {
+        eyes: 1,
+        nose: 2,
+        mouth: 3,
+        face: 4,
+        clothes: 5,
+      },
+      idleAnimation: 'idle_1',
+      id: 'visitor_fallback',
+    };
   }
 }
