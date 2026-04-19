@@ -5,27 +5,58 @@ import { Container, type FederatedPointerEvent, Graphics, Rectangle, Text, type 
 
 const CANVAS_W = 960;
 const CANVAS_H = 640;
-const BRUSH_R0 = 4;
-const BRUSH_R1 = BRUSH_R0 * 2;
+const BOARD_BG = 0xf5f5f5;
 const BRUSH_GROW_SEC = 1.05;
+
+const THICKNESS_PRESETS = [
+  { r0: 2, r1: 4 },
+  { r0: 4, r1: 8 },
+  { r0: 8, r1: 16 },
+] as const;
 
 const UI_PAD = 10;
 const UI_W = 168;
 const TEMPLATE_CHIP = 52;
 const TEMPLATE_GAP = 8;
-const TEMPLATES_TOP = 78;
+const TOOLS_Y = 52;
+const TOOL_ROW_H = 38;
+const THICKNESS_Y = TOOLS_Y + TOOL_ROW_H + 6;
+const THICKNESS_ROW_H = 32;
+const TEMPLATES_TOP = THICKNESS_Y + THICKNESS_ROW_H + 12;
 const PANEL_BOTTOM_PAD = 18;
 const TEMPLATE_ROWS = 3;
 const UI_PANEL_H =
   TEMPLATES_TOP + TEMPLATE_ROWS * TEMPLATE_CHIP + (TEMPLATE_ROWS - 1) * TEMPLATE_GAP + PANEL_BOTTOM_PAD;
 const PLACED_SCALE = 1.35;
+const TEMPLATE_NAV_ARROW_W = 22;
+const TEMPLATE_NAV_GAP = 6;
+
+type TemplateKind =
+  | 'heart'
+  | 'heart_crimson'
+  | 'heart_wire'
+  | 'star'
+  | 'star_sapphire'
+  | 'star_silver'
+  | 'cloud'
+  | 'cloud_storm'
+  | 'cloud_candy';
+
+const TEMPLATE_CATALOG: readonly (readonly TemplateKind[])[] = [
+  ['heart', 'heart_crimson', 'heart_wire'],
+  ['star', 'star_sapphire', 'star_silver'],
+  ['cloud', 'cloud_storm', 'cloud_candy'],
+] as const;
+
+const STROKE_LIVE_POINT_CAP = 340;
+const STROKE_LIVE_KEEP = 40;
 
 const UI_SHOW_IN_DUR = 0.34;
 const UI_SHOW_RECOIL_DUR = 0.12;
 const UI_SHOW_RETURN_DUR = 0.1;
 const UI_SHOW_RECOIL_PX = 10;
 
-type TemplateKind = 'heart' | 'star' | 'cloud';
+type DrawTool = 'brush' | 'eraser';
 
 export class DrawingScreen extends Container implements AppScreen {
   public static assetBundles = ['main'];
@@ -35,9 +66,11 @@ export class DrawingScreen extends Container implements AppScreen {
 
   private board: Container;
   private bg: Graphics;
-  private strokesLayer: Container;
+  private brushStrokesLayer: Container;
   private placedTemplatesLayer: Container;
+  private eraserStrokesLayer: Container;
   private activeLine: Graphics;
+  private activeEraserLine: Graphics;
   private hoverDot: Graphics;
   private boardHolstMask: Graphics;
   private uiDock!: Container;
@@ -47,6 +80,17 @@ export class DrawingScreen extends Container implements AppScreen {
   private pressStartMs = 0;
   private readonly brushEase = gsap.parseEase('power2.out');
   private isDrawing = false;
+  private drawTool: DrawTool = 'brush';
+  private thicknessIx = 1;
+  private liveStrokeR0: number = THICKNESS_PRESETS[1].r0;
+  private liveStrokeR1: number = THICKNESS_PRESETS[1].r1;
+  private liveStrokeIsEraser = false;
+  private strokeBakeAccum: Graphics | null = null;
+
+  private toolBrushBg!: Graphics;
+  private toolEraserBg!: Graphics;
+  private readonly thickBgs: Graphics[] = [];
+
   private stageDragAttached = false;
   private canvasHolstPointerAttached = false;
   private pointerOverBoard = false;
@@ -56,12 +100,17 @@ export class DrawingScreen extends Container implements AppScreen {
   private uiDockTargetX = 0;
   private uiDockHiddenX = 0;
 
-  private dragKind: TemplateKind | null = null;
+  private dragCat: number | null = null;
+  private dragTemplateKind: TemplateKind | null = null;
   private dragGhost: Container | null = null;
   private dragGrabOnChip = { x: TEMPLATE_CHIP * 0.5, y: TEMPLATE_CHIP * 0.5 };
   private stageTemplateDrag = false;
   private readonly onStageTemplateMove = (e: FederatedPointerEvent) => this.handleTemplateDragMove(e);
   private readonly onStageTemplateUp = (e: FederatedPointerEvent) => this.handleTemplateDragUp(e);
+
+  private readonly categoryVariantIx = [0, 0, 0];
+  private readonly placedByCategory: (Container | null)[] = [null, null, null];
+  private readonly templateRowPreviewGfx: (Graphics | undefined)[] = [];
 
   private readonly onDomCanvasPointerMove = (ev: PointerEvent) => {
     const app = engine();
@@ -141,24 +190,34 @@ export class DrawingScreen extends Container implements AppScreen {
     this.bg.eventMode = 'none';
     this.bg
       .rect(0, 0, CANVAS_W, CANVAS_H)
-      .fill({ color: 0xf5f5f5, alpha: 1 })
+      .fill({ color: BOARD_BG, alpha: 1 })
       .stroke({ width: 2, color: 0x333333, alpha: 1 });
     this.board.addChild(this.bg);
 
-    this.strokesLayer = new Container();
-    this.strokesLayer.label = 'drawing_strokes';
-    this.strokesLayer.eventMode = 'none';
-    this.board.addChild(this.strokesLayer);
+    this.brushStrokesLayer = new Container();
+    this.brushStrokesLayer.label = 'drawing_brush_strokes';
+    this.brushStrokesLayer.eventMode = 'none';
+    this.board.addChild(this.brushStrokesLayer);
+
+    this.activeLine = new Graphics();
+    this.activeLine.label = 'drawing_lines_active';
+    this.activeLine.eventMode = 'none';
+    this.brushStrokesLayer.addChild(this.activeLine);
 
     this.placedTemplatesLayer = new Container();
     this.placedTemplatesLayer.label = 'drawing_placed_templates';
     this.placedTemplatesLayer.eventMode = 'none';
     this.board.addChild(this.placedTemplatesLayer);
 
-    this.activeLine = new Graphics();
-    this.activeLine.label = 'drawing_lines_active';
-    this.activeLine.eventMode = 'none';
-    this.board.addChild(this.activeLine);
+    this.eraserStrokesLayer = new Container();
+    this.eraserStrokesLayer.label = 'drawing_eraser_strokes';
+    this.eraserStrokesLayer.eventMode = 'none';
+    this.board.addChild(this.eraserStrokesLayer);
+
+    this.activeEraserLine = new Graphics();
+    this.activeEraserLine.label = 'drawing_eraser_active';
+    this.activeEraserLine.eventMode = 'none';
+    this.eraserStrokesLayer.addChild(this.activeEraserLine);
 
     this.hoverDot = new Graphics();
     this.hoverDot.eventMode = 'none';
@@ -207,7 +266,9 @@ export class DrawingScreen extends Container implements AppScreen {
     undoText.position.set((UI_W - 16) * 0.5, 18);
     undoBtn.addChild(undoText);
     undoBtn.position.set(8, 10);
-    undoBtn.on('pointertap', () => this.undoLastStroke());
+    undoBtn.on('pointertap', () => {
+      this.undoLastStroke();
+    });
     undoBtn.on('pointerover', () => {
       undoBg
         .clear()
@@ -224,19 +285,98 @@ export class DrawingScreen extends Container implements AppScreen {
     });
     this.uiDock.addChild(undoBtn);
 
+    const toolsTitle = new Text({
+      text: 'Tool',
+      style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
+    });
+    toolsTitle.position.set(10, TOOLS_Y - 18);
+    this.uiDock.addChild(toolsTitle);
+
+    const brushBtn = new Container();
+    brushBtn.label = 'drawing_tool_brush';
+    brushBtn.eventMode = 'static';
+    brushBtn.cursor = 'pointer';
+    const bw = this.toolSlotW();
+    brushBtn.hitArea = new Rectangle(0, 0, bw, TOOL_ROW_H);
+    this.toolBrushBg = new Graphics();
+    this.paintToolSlotBg(this.toolBrushBg, bw, TOOL_ROW_H, true);
+    brushBtn.addChild(this.toolBrushBg);
+    const brushLabel = new Text({
+      text: 'Brush',
+      style: { fill: 0xf0f4fa, fontFamily: 'sans-serif', fontSize: 13 },
+    });
+    brushLabel.anchor.set(0.5);
+    brushLabel.position.set(bw * 0.5, TOOL_ROW_H * 0.5);
+    brushBtn.addChild(brushLabel);
+    brushBtn.position.set(8, TOOLS_Y);
+    brushBtn.on('pointertap', () => this.setDrawTool('brush'));
+    this.uiDock.addChild(brushBtn);
+
+    const eraserBtn = new Container();
+    eraserBtn.label = 'drawing_tool_eraser';
+    eraserBtn.eventMode = 'static';
+    eraserBtn.cursor = 'pointer';
+    eraserBtn.hitArea = new Rectangle(0, 0, bw, TOOL_ROW_H);
+    this.toolEraserBg = new Graphics();
+    this.paintToolSlotBg(this.toolEraserBg, bw, TOOL_ROW_H, false);
+    eraserBtn.addChild(this.toolEraserBg);
+    const eraserLabel = new Text({
+      text: 'Eraser',
+      style: { fill: 0xf0f4fa, fontFamily: 'sans-serif', fontSize: 13 },
+    });
+    eraserLabel.anchor.set(0.5);
+    eraserLabel.position.set(bw * 0.5, TOOL_ROW_H * 0.5);
+    eraserBtn.addChild(eraserLabel);
+    eraserBtn.position.set(8 + bw + 6, TOOLS_Y);
+    eraserBtn.on('pointertap', () => this.setDrawTool('eraser'));
+    this.uiDock.addChild(eraserBtn);
+
+    const thickTitle = new Text({
+      text: 'Line width',
+      style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
+    });
+    thickTitle.position.set(10, THICKNESS_Y - 18);
+    this.uiDock.addChild(thickTitle);
+
+    const thickGap = 6;
+    const thickW = this.thickSlotW();
+    for (let i = 0; i < 3; i++) {
+      const box = new Container();
+      box.label = `drawing_thickness_${i}`;
+      box.eventMode = 'static';
+      box.cursor = 'pointer';
+      box.hitArea = new Rectangle(0, 0, thickW, THICKNESS_ROW_H);
+      const bg = new Graphics();
+      this.paintThickSlotBg(bg, thickW, THICKNESS_ROW_H, false);
+      box.addChild(bg);
+      this.thickBgs.push(bg);
+      const pr = THICKNESS_PRESETS[i]!;
+      const preview = new Graphics();
+      const cy = THICKNESS_ROW_H * 0.5;
+      const cx = thickW * 0.5;
+      preview
+        .circle(cx, cy, pr.r0)
+        .fill({ color: 0x1a1a1a, alpha: 0.9 })
+        .stroke({ width: 1, color: 0xffffff, alpha: 0.35 });
+      box.addChild(preview);
+      box.position.set(8 + i * (thickW + thickGap), THICKNESS_Y);
+      const ix = i;
+      box.on('pointertap', () => this.setThicknessIx(ix));
+      this.uiDock.addChild(box);
+    }
+
     const tplTitle = new Text({
       text: 'Templates',
       style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
     });
-    tplTitle.position.set(10, 56);
+    tplTitle.position.set(10, TEMPLATES_TOP - 18);
     this.uiDock.addChild(tplTitle);
 
-    const kinds: TemplateKind[] = ['heart', 'star', 'cloud'];
     let y = TEMPLATES_TOP;
-    for (const kind of kinds) {
-      const chip = this.makeTemplateChip(kind);
-      chip.position.set((UI_W - TEMPLATE_CHIP) * 0.5, y);
-      this.uiDock.addChild(chip);
+    for (let cat = 0; cat < TEMPLATE_CATALOG.length; cat++) {
+      const row = this.buildTemplateNavRow(cat);
+      row.position.set(0, y);
+      this.uiDock.addChild(row);
       y += TEMPLATE_CHIP + TEMPLATE_GAP;
     }
 
@@ -244,33 +384,173 @@ export class DrawingScreen extends Container implements AppScreen {
     this.uiDockHiddenX = CANVAS_W;
     this.uiDock.position.set(this.uiDockHiddenX, UI_PAD);
     this.board.addChild(this.uiDock);
+    this.refreshToolChrome();
   }
 
-  private makeTemplateChip(kind: TemplateKind): Container {
-    const c = new Container();
-    c.label = `template_chip_${kind}`;
-    c.eventMode = 'static';
-    c.cursor = 'grab';
-    c.hitArea = new Rectangle(0, 0, TEMPLATE_CHIP, TEMPLATE_CHIP);
-    const g = new Graphics();
-    drawTemplateShape(g, kind, TEMPLATE_CHIP);
-    c.addChild(g);
-    c.on('pointerdown', (e: FederatedPointerEvent) => {
-      e.stopPropagation();
-      this.beginTemplateDrag(kind, c, e);
+  private toolSlotW() {
+    return (UI_W - 24 - 6) * 0.5;
+  }
+
+  private thickSlotW() {
+    return (UI_W - 16 - 6 * 2) / 3;
+  }
+
+  private paintToolSlotBg(g: Graphics, w: number, h: number, active: boolean) {
+    g.clear();
+    g.roundRect(0, 0, w, h, 6)
+      .fill({ color: active ? 0x4a6b94 : 0x353540, alpha: 1 })
+      .stroke({
+        width: active ? 2 : 1,
+        color: active ? 0xa8c8ec : 0x6a6a78,
+        alpha: active ? 0.85 : 0.5,
+      });
+  }
+
+  private paintThickSlotBg(g: Graphics, w: number, h: number, active: boolean) {
+    g.clear();
+    g.roundRect(0, 0, w, h, 6)
+      .fill({ color: active ? 0x4a6b94 : 0x353540, alpha: 1 })
+      .stroke({
+        width: active ? 2 : 1,
+        color: active ? 0xa8c8ec : 0x6a6a78,
+        alpha: active ? 0.85 : 0.5,
+      });
+  }
+
+  private refreshToolChrome() {
+    const tw = this.toolSlotW();
+    this.paintToolSlotBg(this.toolBrushBg, tw, TOOL_ROW_H, this.drawTool === 'brush');
+    this.paintToolSlotBg(this.toolEraserBg, tw, TOOL_ROW_H, this.drawTool === 'eraser');
+    const w = this.thickSlotW();
+    for (let i = 0; i < this.thickBgs.length; i++) {
+      this.paintThickSlotBg(this.thickBgs[i]!, w, THICKNESS_ROW_H, i === this.thicknessIx);
+    }
+  }
+
+  private setDrawTool(t: DrawTool) {
+    if (this.isDrawing) return;
+    if (this.drawTool === t) return;
+    this.drawTool = t;
+    this.refreshToolChrome();
+    if (this.pointerOverBoard && !this.isDrawing) this.refreshHoverDot();
+  }
+
+  private setThicknessIx(ix: number) {
+    if (this.isDrawing) return;
+    if (ix < 0 || ix >= THICKNESS_PRESETS.length) return;
+    if (this.thicknessIx === ix) return;
+    this.thicknessIx = ix;
+    this.refreshToolChrome();
+    if (this.pointerOverBoard && !this.isDrawing) this.refreshHoverDot();
+  }
+
+  private buildTemplateNavRow(cat: number): Container {
+    const row = new Container();
+    row.label = `template_row_${cat}`;
+
+    const rowW = TEMPLATE_NAV_ARROW_W * 2 + TEMPLATE_NAV_GAP * 2 + TEMPLATE_CHIP;
+    const rowX = (UI_W - rowW) * 0.5;
+
+    const left = new Container();
+    left.label = `template_nav_left_${cat}`;
+    left.eventMode = 'static';
+    left.cursor = 'pointer';
+    left.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP);
+    const leftBg = new Graphics()
+      .roundRect(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP, 6)
+      .fill({ color: 0x3a3a44, alpha: 1 })
+      .stroke({ width: 1, color: 0x6a6a78, alpha: 0.55 });
+    left.addChild(leftBg);
+    const leftTxt = new Text({
+      text: '‹',
+      style: { fill: 0xe8eaef, fontFamily: 'sans-serif', fontSize: 22 },
     });
-    return c;
+    leftTxt.anchor.set(0.5);
+    leftTxt.position.set(TEMPLATE_NAV_ARROW_W * 0.5, TEMPLATE_CHIP * 0.5);
+    left.addChild(leftTxt);
+    left.position.set(rowX, 0);
+    left.on('pointertap', () => this.cycleTemplateCategory(cat, -1));
+    row.addChild(left);
+
+    const chip = new Container();
+    chip.label = `template_chip_cat_${cat}`;
+    chip.eventMode = 'static';
+    chip.cursor = 'grab';
+    chip.hitArea = new Rectangle(0, 0, TEMPLATE_CHIP, TEMPLATE_CHIP);
+    chip.position.set(rowX + TEMPLATE_NAV_ARROW_W + TEMPLATE_NAV_GAP, 0);
+    const preview = new Graphics();
+    this.templateRowPreviewGfx[cat] = preview;
+    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
+    drawTemplateShape(preview, kind, TEMPLATE_CHIP);
+    chip.addChild(preview);
+    chip.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.beginTemplateDrag(cat, chip, e);
+    });
+    row.addChild(chip);
+
+    const right = new Container();
+    right.label = `template_nav_right_${cat}`;
+    right.eventMode = 'static';
+    right.cursor = 'pointer';
+    right.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP);
+    const rightBg = new Graphics()
+      .roundRect(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP, 6)
+      .fill({ color: 0x3a3a44, alpha: 1 })
+      .stroke({ width: 1, color: 0x6a6a78, alpha: 0.55 });
+    right.addChild(rightBg);
+    const rightTxt = new Text({
+      text: '›',
+      style: { fill: 0xe8eaef, fontFamily: 'sans-serif', fontSize: 22 },
+    });
+    rightTxt.anchor.set(0.5);
+    rightTxt.position.set(TEMPLATE_NAV_ARROW_W * 0.5, TEMPLATE_CHIP * 0.5);
+    right.addChild(rightTxt);
+    right.position.set(rowX + TEMPLATE_NAV_ARROW_W + TEMPLATE_NAV_GAP + TEMPLATE_CHIP + TEMPLATE_NAV_GAP, 0);
+    right.on('pointertap', () => this.cycleTemplateCategory(cat, 1));
+    row.addChild(right);
+
+    return row;
   }
 
-  private beginTemplateDrag(kind: TemplateKind, chip: Container, e: FederatedPointerEvent) {
+  private cycleTemplateCategory(cat: number, delta: number) {
+    if (this.isDrawing) return;
+    const list = TEMPLATE_CATALOG[cat];
+    if (!list?.length) return;
+    const n = list.length;
+    this.categoryVariantIx[cat] = (this.categoryVariantIx[cat] + delta + n * 16) % n;
+    this.refreshTemplateRowPreview(cat);
+    const placed = this.placedByCategory[cat];
+    if (placed) {
+      const g = placed.getChildAt(0) as Graphics;
+      const kind = list[this.categoryVariantIx[cat]!]!;
+      drawTemplateShape(g, kind, TEMPLATE_CHIP * PLACED_SCALE);
+    }
+  }
+
+  private refreshTemplateRowPreview(cat: number) {
+    const gfx = this.templateRowPreviewGfx[cat];
+    if (!gfx) return;
+    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
+    drawTemplateShape(gfx, kind, TEMPLATE_CHIP);
+  }
+
+  private addStrokeChunkBeforeActive(parent: Container, activeG: Graphics, chunk: Graphics) {
+    const i = parent.getChildIndex(activeG);
+    parent.addChildAt(chunk, i);
+  }
+
+  private beginTemplateDrag(cat: number, chip: Container, e: FederatedPointerEvent) {
     if (this.dragGhost) return;
+    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
     const lp = this.board.toLocal(e.global);
     const localOnChip = chip.toLocal(e.global);
     this.dragGrabOnChip = {
       x: Math.max(0, Math.min(TEMPLATE_CHIP, localOnChip.x)),
       y: Math.max(0, Math.min(TEMPLATE_CHIP, localOnChip.y)),
     };
-    this.dragKind = kind;
+    this.dragCat = cat;
+    this.dragTemplateKind = kind;
     this.stageTemplateDrag = true;
     this.dragGhost = new Container();
     this.dragGhost.label = 'template_drag_ghost';
@@ -294,7 +574,7 @@ export class DrawingScreen extends Container implements AppScreen {
   }
 
   private handleTemplateDragUp(e: FederatedPointerEvent) {
-    if (!this.dragGhost || !this.dragKind) {
+    if (!this.dragGhost || this.dragCat === null || this.dragTemplateKind === null) {
       this.cleanupTemplateDrag();
       return;
     }
@@ -305,22 +585,31 @@ export class DrawingScreen extends Container implements AppScreen {
     const onCanvas = x >= 0 && x <= CANVAS_W && y >= 0 && y <= CANVAS_H && !this.pointInUiDock(lp.x, lp.y);
 
     if (onCanvas) {
+      const cat = this.dragCat;
       const placedSize = TEMPLATE_CHIP * PLACED_SCALE;
       const ox = (this.dragGrabOnChip.x / TEMPLATE_CHIP) * placedSize;
       const oy = (this.dragGrabOnChip.y / TEMPLATE_CHIP) * placedSize;
+      const existing = this.placedByCategory[cat];
+      if (existing) {
+        this.placedTemplatesLayer.removeChild(existing);
+        existing.destroy({ children: true });
+        this.placedByCategory[cat] = null;
+      }
       const placed = new Container();
-      placed.label = `placed_${this.dragKind}`;
+      placed.label = `placed_cat${cat}_${this.dragTemplateKind}`;
       placed.eventMode = 'none';
       placed.position.set(x - ox, y - oy);
       const g = new Graphics();
-      drawTemplateShape(g, this.dragKind, placedSize);
+      drawTemplateShape(g, this.dragTemplateKind, placedSize);
       placed.addChild(g);
       this.placedTemplatesLayer.addChild(placed);
+      this.placedByCategory[cat] = placed;
     }
 
     this.dragGhost.destroy({ children: true });
     this.dragGhost = null;
-    this.dragKind = null;
+    this.dragCat = null;
+    this.dragTemplateKind = null;
     this.cleanupTemplateDrag();
 
     if (!this.pointerOverBoard) this.hideUiDock();
@@ -443,15 +732,33 @@ export class DrawingScreen extends Container implements AppScreen {
     this.endStroke();
     this.hideUiDockInstant();
     this.board.off('pointerdown', this.onBoardDown);
-    for (const g of this.strokeChunks) {
-      g.destroy({ children: true });
-    }
     this.strokeChunks.length = 0;
+    for (const ch of [...this.brushStrokesLayer.children]) {
+      if (ch !== this.activeLine) {
+        (ch as Graphics).destroy({ children: true });
+      }
+    }
+    for (const ch of [...this.eraserStrokesLayer.children]) {
+      if (ch !== this.activeEraserLine) {
+        (ch as Graphics).destroy({ children: true });
+      }
+    }
     this.placedTemplatesLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.placedByCategory.fill(null);
+    this.categoryVariantIx[0] = 0;
+    this.categoryVariantIx[1] = 0;
+    this.categoryVariantIx[2] = 0;
+    for (let c = 0; c < TEMPLATE_CATALOG.length; c++) {
+      this.refreshTemplateRowPreview(c);
+    }
     this.activeLine.clear();
+    this.activeEraserLine.clear();
     this.strokePoints.length = 0;
     this.hideHoverDot();
     this.pointerOverBoard = false;
+    this.drawTool = 'brush';
+    this.thicknessIx = 1;
+    this.refreshToolChrome();
   }
 
   public async pause() {
@@ -477,15 +784,22 @@ export class DrawingScreen extends Container implements AppScreen {
 
   private brushRadiusAt(elapsedSec: number): number {
     const u = Math.min(1, elapsedSec / BRUSH_GROW_SEC);
-    return BRUSH_R0 + (BRUSH_R1 - BRUSH_R0) * this.brushEase(u);
+    return this.liveStrokeR0 + (this.liveStrokeR1 - this.liveStrokeR0) * this.brushEase(u);
   }
 
   private beginStroke(p: { x: number; y: number }) {
     const c = this.clampToBoard(p);
+    const pr = THICKNESS_PRESETS[this.thicknessIx]!;
+    this.liveStrokeR0 = pr.r0;
+    this.liveStrokeR1 = pr.r1;
+    this.liveStrokeIsEraser = this.drawTool === 'eraser';
+    this.strokeBakeAccum = null;
     this.pressStartMs = performance.now();
     this.isDrawing = true;
     this.strokePoints.length = 0;
     this.strokePoints.push({ x: c.x, y: c.y, tSec: 0 });
+    this.activeLine.clear();
+    this.activeEraserLine.clear();
     this.redrawActiveBrush();
     this.hideHoverDot();
     this.attachStageDrag();
@@ -498,12 +812,12 @@ export class DrawingScreen extends Container implements AppScreen {
     const nowMs = performance.now();
     const tNow = (nowMs - this.pressStartMs) / 1000;
     const rNow = this.brushRadiusAt(tNow);
-    const step = Math.max(0.35, rNow * 0.1);
+    const step = Math.max(1.5, rNow * 0.42);
 
     const dx = x - last.x;
     const dy = y - last.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < 0.12) return;
+    if (dist < Math.max(0.28, rNow * 0.14)) return;
 
     const nx = dx / dist;
     const ny = dy / dist;
@@ -513,7 +827,7 @@ export class DrawingScreen extends Container implements AppScreen {
     } else {
       let s = step;
       let guard = 0;
-      const maxInterp = 4096;
+      const maxInterp = 220;
       while (s < dist && guard++ < maxInterp) {
         const tSec = (performance.now() - this.pressStartMs) / 1000;
         this.strokePoints.push({
@@ -525,6 +839,7 @@ export class DrawingScreen extends Container implements AppScreen {
       }
       this.strokePoints.push({ x, y, tSec: (performance.now() - this.pressStartMs) / 1000 });
     }
+    this.maybeFlushStrokePointBudget();
     this.redrawActiveBrush();
   }
 
@@ -534,13 +849,79 @@ export class DrawingScreen extends Container implements AppScreen {
     this.isDrawing = false;
     this.strokePoints.length = 0;
     this.activeLine.clear();
+    this.activeEraserLine.clear();
     this.detachStageDrag();
     if (this.pointerOverBoard) this.refreshHoverDot();
     else this.hideHoverDot();
   }
 
+  private maybeFlushStrokePointBudget() {
+    if (this.strokePoints.length <= STROKE_LIVE_POINT_CAP) return;
+    const nMove = this.strokePoints.length - STROKE_LIVE_KEEP;
+    if (nMove <= 0) return;
+    if (!this.strokeBakeAccum) {
+      this.strokeBakeAccum = new Graphics();
+      if (this.liveStrokeIsEraser) {
+        this.addStrokeChunkBeforeActive(this.eraserStrokesLayer, this.activeEraserLine, this.strokeBakeAccum);
+      } else {
+        this.addStrokeChunkBeforeActive(this.brushStrokesLayer, this.activeLine, this.strokeBakeAccum);
+      }
+    }
+    const ink = this.liveStrokeIsEraser
+      ? { color: BOARD_BG, alpha: 1 }
+      : { color: 0x000000, alpha: 1 };
+    for (let i = 0; i < nMove; i++) {
+      const p = this.strokePoints[i]!;
+      const r = this.brushRadiusAt(p.tSec);
+      this.strokeBakeAccum.circle(p.x, p.y, r).fill(ink);
+    }
+    if (this.liveStrokeIsEraser) {
+      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints.slice(0, nMove));
+    }
+    this.strokePoints.splice(0, nMove);
+  }
+
+  private removePlacedTemplatesHitByStrokePoints(
+    points: readonly { x: number; y: number; tSec: number }[],
+    nowSecForLast?: number,
+  ) {
+    if (points.length === 0) return;
+    const placedSize = TEMPLATE_CHIP * PLACED_SCALE;
+    const layer = this.placedTemplatesLayer;
+    const n = points.length;
+    const victims: Container[] = [];
+    outer: for (const ch of [...layer.children]) {
+      const c = ch as Container;
+      const rx = c.x;
+      const ry = c.y;
+      for (let i = 0; i < n; i++) {
+        const p = points[i]!;
+        let r = this.brushRadiusAt(p.tSec);
+        if (i === n - 1 && nowSecForLast !== undefined) {
+          r = Math.max(r, this.brushRadiusAt(nowSecForLast));
+        }
+        if (circleIntersectsAabb(p.x, p.y, r, rx, ry, placedSize, placedSize)) {
+          victims.push(c);
+          continue outer;
+        }
+      }
+    }
+    for (const c of victims) {
+      for (let cat = 0; cat < this.placedByCategory.length; cat++) {
+        if (this.placedByCategory[cat] === c) {
+          this.placedByCategory[cat] = null;
+          break;
+        }
+      }
+      layer.removeChild(c);
+      c.destroy({ children: true });
+    }
+  }
+
   private redrawActiveBrush() {
+    const target = this.liveStrokeIsEraser ? this.activeEraserLine : this.activeLine;
     this.activeLine.clear();
+    this.activeEraserLine.clear();
     const n = this.strokePoints.length;
     if (n === 0) return;
     const nowSec = (performance.now() - this.pressStartMs) / 1000;
@@ -550,34 +931,58 @@ export class DrawingScreen extends Container implements AppScreen {
       if (i === n - 1) {
         r = Math.max(r, this.brushRadiusAt(nowSec));
       }
-      this.activeLine.circle(p.x, p.y, r).fill({ color: 0x0a0a0a, alpha: 0.96 });
+      const ink = this.liveStrokeIsEraser
+        ? { color: BOARD_BG, alpha: 0.98 }
+        : { color: 0x0a0a0a, alpha: 0.96 };
+      target.circle(p.x, p.y, r).fill(ink);
     }
   }
 
   private bakeStrokeToFinished() {
     const n = this.strokePoints.length;
     if (n === 0) return;
-    const g = new Graphics();
     const nowSec = (performance.now() - this.pressStartMs) / 1000;
+    const g = this.strokeBakeAccum ?? new Graphics();
+    if (!this.strokeBakeAccum) {
+      if (this.liveStrokeIsEraser) {
+        this.addStrokeChunkBeforeActive(this.eraserStrokesLayer, this.activeEraserLine, g);
+      } else {
+        this.addStrokeChunkBeforeActive(this.brushStrokesLayer, this.activeLine, g);
+      }
+    }
+    const ink = this.liveStrokeIsEraser
+      ? { color: BOARD_BG, alpha: 1 }
+      : { color: 0x000000, alpha: 1 };
     for (let i = 0; i < n; i++) {
       const p = this.strokePoints[i]!;
       let r = this.brushRadiusAt(p.tSec);
       if (i === n - 1) {
         r = Math.max(r, this.brushRadiusAt(nowSec));
       }
-      g.circle(p.x, p.y, r).fill({ color: 0x000000, alpha: 1 });
+      g.circle(p.x, p.y, r).fill(ink);
     }
-    this.strokesLayer.addChild(g);
+    if (this.liveStrokeIsEraser) {
+      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints, nowSec);
+    }
     this.strokeChunks.push(g);
+    this.strokeBakeAccum = null;
   }
 
   private moveHoverDot(x: number, y: number) {
     const c = this.clampToBoard({ x, y });
+    const pr = THICKNESS_PRESETS[this.thicknessIx]!;
     this.hoverDot.clear();
-    this.hoverDot
-      .circle(c.x, c.y, BRUSH_R0)
-      .fill({ color: 0x1a1a1a, alpha: 0.88 })
-      .stroke({ width: 1, color: 0xffffff, alpha: 0.75 });
+    if (this.drawTool === 'eraser') {
+      this.hoverDot
+        .circle(c.x, c.y, pr.r0)
+        .fill({ color: BOARD_BG, alpha: 0.95 })
+        .stroke({ width: 2, color: 0x888888, alpha: 0.85 });
+    } else {
+      this.hoverDot
+        .circle(c.x, c.y, pr.r0)
+        .fill({ color: 0x1a1a1a, alpha: 0.88 })
+        .stroke({ width: 1, color: 0xffffff, alpha: 0.75 });
+    }
     this.hoverDot.visible = true;
   }
 
@@ -627,6 +1032,22 @@ export class DrawingScreen extends Container implements AppScreen {
   }
 }
 
+function circleIntersectsAabb(
+  cx: number,
+  cy: number,
+  r: number,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number,
+): boolean {
+  const px = Math.max(rx, Math.min(cx, rx + rw));
+  const py = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - px;
+  const dy = cy - py;
+  return dx * dx + dy * dy <= r * r;
+}
+
 function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
   g.clear();
   const cx = size * 0.5;
@@ -643,6 +1064,26 @@ function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
       g.stroke(stroke);
       break;
     }
+    case 'heart_crimson': {
+      const s = size * 0.22;
+      g.moveTo(cx, cy + s * 1.2);
+      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
+      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
+      g.closePath();
+      g.fill({ color: 0xc62828, alpha: 0.9 });
+      g.stroke(stroke);
+      break;
+    }
+    case 'heart_wire': {
+      const s = size * 0.22;
+      g.moveTo(cx, cy + s * 1.2);
+      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
+      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
+      g.closePath();
+      g.fill({ color: 0xffffff, alpha: 0.01 });
+      g.stroke({ width: 3, color: 0xad1457, alpha: 1 });
+      break;
+    }
     case 'star': {
       const spikes = 5;
       const rOut = size * 0.38;
@@ -657,6 +1098,40 @@ function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
       }
       g.closePath();
       g.fill({ color: 0xffd54a, alpha: 0.9 });
+      g.stroke(stroke);
+      break;
+    }
+    case 'star_sapphire': {
+      const spikes = 5;
+      const rOut = size * 0.38;
+      const rIn = rOut * 0.42;
+      for (let i = 0; i < spikes * 2; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
+        const rr = i % 2 === 0 ? rOut : rIn;
+        const px = cx + Math.cos(a) * rr;
+        const py = cy + Math.sin(a) * rr;
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.closePath();
+      g.fill({ color: 0x3949ab, alpha: 0.92 });
+      g.stroke(stroke);
+      break;
+    }
+    case 'star_silver': {
+      const spikes = 5;
+      const rOut = size * 0.38;
+      const rIn = rOut * 0.42;
+      for (let i = 0; i < spikes * 2; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
+        const rr = i % 2 === 0 ? rOut : rIn;
+        const px = cx + Math.cos(a) * rr;
+        const py = cy + Math.sin(a) * rr;
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.closePath();
+      g.fill({ color: 0xb0bec5, alpha: 0.95 });
       g.stroke(stroke);
       break;
     }
@@ -677,6 +1152,26 @@ function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
       g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
         .fill({ color: 0xe3f2fd, alpha: 0.95 })
         .stroke(stroke);
+      break;
+    }
+    case 'cloud_storm': {
+      const r0 = size * 0.14;
+      const fill = { color: 0x78909c, alpha: 0.95 };
+      g.circle(cx - size * 0.18, cy, r0 * 1.1).fill(fill).stroke(stroke);
+      g.circle(cx, cy - r0 * 0.3, r0 * 1.25).fill(fill).stroke(stroke);
+      g.circle(cx + size * 0.18, cy, r0 * 1.05).fill(fill).stroke(stroke);
+      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0).fill(fill).stroke(stroke);
+      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95).fill(fill).stroke(stroke);
+      break;
+    }
+    case 'cloud_candy': {
+      const r0 = size * 0.14;
+      const fill = { color: 0xf8bbd0, alpha: 0.95 };
+      g.circle(cx - size * 0.18, cy, r0 * 1.1).fill(fill).stroke(stroke);
+      g.circle(cx, cy - r0 * 0.3, r0 * 1.25).fill(fill).stroke(stroke);
+      g.circle(cx + size * 0.18, cy, r0 * 1.05).fill(fill).stroke(stroke);
+      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0).fill(fill).stroke(stroke);
+      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95).fill(fill).stroke(stroke);
       break;
     }
     default:
