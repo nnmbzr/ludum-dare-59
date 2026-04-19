@@ -63,6 +63,7 @@ export class FisheyeFilter extends Filter {
 
     super({
       glProgram,
+      resolution: 2,
       resources: {
         fisheyeUniforms: {
           uStrength: { value: strength, type: 'f32' },

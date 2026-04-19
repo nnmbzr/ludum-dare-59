@@ -82,18 +82,16 @@ async function clearAll() {
   });
 }
 
-function normalizeUrl(inputUrl: string) {
-  try {
-    const parsed = new URL(inputUrl, window.location.origin);
-    return parsed.pathname;
-  } catch (e) {
-    return inputUrl;
-  }
-}
+type DevConsoleWindow = Window & {
+  USED_DEV_CONSOLE?: boolean;
+  UNREGISTER_DEV_CONSOLE_SW?: () => Promise<void>;
+};
 
-(window as any).USED_DEV_CONSOLE = true;
+const win = window as DevConsoleWindow;
 
-(window as any).UNREGISTER_DEV_CONSOLE_SW = async () => {
+win.USED_DEV_CONSOLE = true;
+
+win.UNREGISTER_DEV_CONSOLE_SW = async () => {
   if ('serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const registration of registrations) {
@@ -108,7 +106,7 @@ function normalizeUrl(inputUrl: string) {
 async function registerSW() {
   if ('serviceWorker' in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register('/devconsole-sw.js');
+      await navigator.serviceWorker.register('/devconsole-sw.js');
 
       // Listen for messages from SW to track requested URLs
       navigator.serviceWorker.addEventListener('message', (event) => {
@@ -132,7 +130,7 @@ async function registerSW() {
 // UI Rendering
 
 let isPanelOpen = false;
-let renderTimeout: any;
+let renderTimeout: ReturnType<typeof setTimeout> | undefined;
 
 function scheduleRender() {
   if (renderTimeout) clearTimeout(renderTimeout);
