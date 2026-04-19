@@ -1,15 +1,24 @@
 import { type PatternId, type SkinId } from './types';
 
+// Минимальное время, которое должно пройти с начала рисования, чтобы его можно было считать полноценным.
+// Если пользователь нарисовал фоторобот быстрее, то имеет смысл добавить к задержке перед следующим посетителем
+// недостающие секунды, чтобы не давать игроку слишком лёгкую игру.
+const MINIMUM_DRAW_TIME_SEC = 3;
+
+const FIRST_VISITOR_SPAWN_DELAY_SEC = 3;
+
 /**
  * Параметры сложности + состояние сессии.
  */
 export class Balance {
   public day = 1;
   public paperCount = 0;
-  public quotaCompleted = 0;
   public dayTimeRemainingMs = 0;
 
   private currentDrawingTimeMs = 0;
+  private firstVisitorSpawned = false;
+
+  private currentDailyQuota = 0;
 
   /** Сколько фотороботов надо сдать за день */
   public getDailyQuota(): number {
@@ -27,14 +36,25 @@ export class Balance {
     return 10_000;
   }
 
-  public getMinimumDrawMs(): number {
+  public getMinimumDrawSec(): number {
     // TODO: минимальное время, за которое пользователь должен нарисовать фоторобот. Если он сделал быстрее, имеет смысл добавлять это время к задержке перед следующими посетителем.
-    return 3_000;
+    return MINIMUM_DRAW_TIME_SEC;
   }
 
-  public getVisitorSpawnDelayMs(): number {
-    // TODO: задержка между появлением посетителя (возможно, имеет смысл самого первого в день давать без задержки, а дальше уже как-то настраивать. Главное чтобы билось с квотой)
-    return 3_000 + Math.max(0, this.getMinimumDrawMs() - this.currentDrawingTimeMs);
+  public getVisitorSpawnDelaySec(): number {
+    // TODO: задержка между появлением посетителя
+    let delay = FIRST_VISITOR_SPAWN_DELAY_SEC;
+
+    // Возможно, имеет смысл самого первого в день давать без задержки
+    // а дальше уже как-то настраивать. Главное чтобы билось с квотой)
+    if (!this.firstVisitorSpawned) {
+      this.firstVisitorSpawned = true;
+      delay = 0;
+    }
+
+    const fine = Math.max(0, this.getMinimumDrawSec() - this.currentDrawingTimeMs / 1000);
+
+    return delay + fine;
   }
 
   /** Разброс для угадывания: 0 = все варианты идентичны (нерешаемо!), 1 = все разные */
@@ -69,8 +89,9 @@ export class Balance {
   }
 
   public startDay(): void {
-    this.quotaCompleted = 0;
     this.dayTimeRemainingMs = this.getDayDurationMs();
+    this.firstVisitorSpawned = false;
+    this.paperCount = this.getStartingPaperCount();
   }
 
   public drawAccepted(drawTimeMs: number): void {
@@ -82,13 +103,13 @@ export class Balance {
   }
 
   public isQuotaMet(): boolean {
-    return this.quotaCompleted >= this.getDailyQuota();
+    return this.currentDailyQuota >= this.getDailyQuota();
   }
 
   public reset(): void {
     this.day = 1;
-    this.paperCount = this.getStartingPaperCount();
-    this.quotaCompleted = 0;
     this.dayTimeRemainingMs = 0;
+    this.firstVisitorSpawned = false;
+    this.currentDailyQuota = 0;
   }
 }
