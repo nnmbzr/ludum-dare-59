@@ -15,7 +15,7 @@ export interface VisitorData {
   id: string;
   skins: SkinSet;
   idleAnimation: string;
-  stayMs: number;
+  staySec: number;
 }
 
 /** То, что прилетело с сервера для угадывания */
