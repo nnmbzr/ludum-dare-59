@@ -84,7 +84,11 @@ export class VisitorManController extends SpineObjectController {
 
     this.spine.skeleton.setSlotsToSetupPose();
 
-    this.play(VisitorManAnimation.LONG_1, true, 0);
+    if (suspect) {
+      this.play(VisitorManAnimation.SUSPECT, true, 0);
+    } else {
+      this.play(VisitorManAnimation.LONG_1, true, 0);
+    }
   }
 
   public async playHideCharacterAnimation(): Promise<void> {

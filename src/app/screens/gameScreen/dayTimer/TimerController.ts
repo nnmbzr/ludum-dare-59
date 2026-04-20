@@ -3,10 +3,10 @@ import type { ValuesOf } from '@/app/utils/typesHelper';
 import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
 import type { Container } from 'pixi.js';
 
-export const TimerSlots = {
+export const TIMER_SLOTS = {
   TARGET_QUOTE: 'Container_Timer',
 } as const;
-type TimerSlots = ValuesOf<typeof TimerSlots>;
+type TIMER_SLOTS = ValuesOf<typeof TIMER_SLOTS>;
 
 const SPINE_SETTINGS = {
   skeleton: 'Timer.json',
@@ -52,7 +52,7 @@ export class TimerController extends SpineObjectController {
     this.state.setAnimation(0, TimerAnimations.ALERT, true);
   }
 
-  public addToSlot(slot: TimerSlots, object: Container): void {
+  public addToSlot(slot: TIMER_SLOTS, object: Container): void {
     this.spine.addSlotObject(slot, object);
   }
 

@@ -1,6 +1,6 @@
 // screens/game/HintPanel.ts
 
-import { Container, type Text } from 'pixi.js';
+import { Container, Text } from 'pixi.js';
 import { HINTS_TEXTS } from './Texts';
 import { type GameState } from './types';
 
@@ -8,11 +8,56 @@ import { type GameState } from './types';
  * Плашка с текущей подсказкой. Тупая — ей говорят, что показать, она показывает. Только перенести тексты отсюда в конст
  */
 export class HintPanel extends Container {
-  private text!: Text;
+  private hintText: Text;
+  private pointsLabel: Text;
+  private pointsValue: Text;
+
+  private hintContainer: Container;
 
   constructor() {
     super();
-    // TODO: создать фон плашки и Text-объект
+
+    this.hintText = new Text({
+      text: '',
+      style: {
+        fill: 0xcc9b56,
+        fontSize: 54,
+        fontFamily: 'VT323-Regular',
+        wordWrap: true,
+        wordWrapWidth: 500,
+        align: 'center',
+      },
+    });
+    this.hintText.anchor.set(0.5, 0);
+
+    this.pointsLabel = new Text({
+      text: 'POINTS:',
+      style: { fill: 0xcc9b56, fontSize: 54, fontFamily: 'VT323-Regular', align: 'right' },
+    });
+    this.pointsLabel.anchor.set(1, 0);
+
+    this.pointsValue = new Text({
+      text: '0',
+      style: { fill: 0xcc9b56, fontSize: 46, fontFamily: 'DigitalNumbers-Regular' },
+    });
+    this.pointsValue.anchor.set(0, 0);
+
+    const pointsY = this.hintText.y + 110;
+    this.pointsLabel.y = pointsY;
+    this.pointsLabel.x = 0;
+    this.pointsValue.y = pointsY + (this.pointsLabel.height - this.pointsValue.height) / 2;
+    this.pointsValue.x = 10;
+
+    this.hintContainer = new Container();
+    this.hintContainer.addChild(this.hintText, this.pointsLabel, this.pointsValue);
+    this.hintContainer.x = 0;
+    this.hintContainer.y = 0;
+
+    this.label = 'hint_panel';
+  }
+
+  public getHintContainer(): Container {
+    return this.hintContainer;
   }
 
   public setHintForState(state: GameState): void {
@@ -20,14 +65,10 @@ export class HintPanel extends Container {
 
     console.log('Setting hint for state', state, ':', hint);
 
-    // TODO: возможно нужно будет как-то по-особому работать с текстом для разных стейтов.
-    /* switch (state) {
-      case 'waitingForVisitor':
-        break;
-      case 'alarmOn':
-        break;
-    } */
+    this.hintText.text = hint;
+  }
 
-    // TODO: this.text.text = hint + gsap fade-in
+  public setPoints(points: number): void {
+    this.pointsValue.text = String(points);
   }
 }
