@@ -42,7 +42,7 @@ export const BACKGROUND_SLOTS = {
   STAMP: 'Container_Stamp',
   DRAWING_PAD: 'Container_Drawing_Pad',
   HINT: 'Container_text_01',
-  TARGET_QUOTA: 'Container_text_02',
+  POINTS: 'Container_text_02',
 } as const;
 type BACKGROUND_SLOTS = ValuesOf<typeof BACKGROUND_SLOTS>;
 
