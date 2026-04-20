@@ -17,28 +17,27 @@ export const TimerAnimations = {
   TIMER: 'timer', // track 1
   ON: 'clock_on', // track 0
   OFF: 'clock_off', // track 0
+  ALERT: 'timer_out', // track 0
 } as const;
 type TimerAnimations = ValuesOf<typeof TimerAnimations>;
 
 export class TimerController extends SpineObjectController {
-  // private timerEntry: TrackEntry;
+  private timerEntry: TrackEntry;
 
   constructor() {
     super(SPINE_SETTINGS);
 
     this.state.data.defaultMix = 0.2;
 
-    /* this.timerEntry = this.state.setAnimation(1, TimerAnimations.TIMER, false);
+    this.timerEntry = this.state.setAnimation(1, TimerAnimations.TIMER, false);
     this.timerEntry.timeScale = 0;
-    this.timerEntry.trackTime = 0; */
+    this.timerEntry.trackTime = 0;
   }
 
   // FIXME: проблемы с позиционированием при одновременном запуске треков.
-  public setTime(_progress: number): void {
-    return;
-
-    /* const duration = this.timerEntry.animation?.duration ?? 1;
-    this.timerEntry.trackTime = Math.max(0, Math.min(1, progress)) * duration; */
+  public setTime(progress: number): void {
+    const duration = this.timerEntry.animation?.duration ?? 1;
+    this.timerEntry.trackTime = Math.max(0, Math.min(1, progress)) * duration;
   }
 
   public playOn(): void {
@@ -47,6 +46,10 @@ export class TimerController extends SpineObjectController {
 
   public playOff(): void {
     this.state.setAnimation(0, TimerAnimations.OFF, false);
+  }
+
+  public playAlert(): void {
+    this.state.setAnimation(0, TimerAnimations.ALERT, true);
   }
 
   public addToSlot(slot: TimerSlots, object: Container): void {

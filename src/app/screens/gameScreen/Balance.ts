@@ -5,7 +5,7 @@ import { type PatternId, type SkinId } from './types';
 // недостающие секунды, чтобы не давать игроку слишком лёгкую игру.
 const MINIMUM_DRAW_TIME_SEC = 3;
 
-const FIRST_VISITOR_SPAWN_DELAY_SEC = 3;
+const FIRST_VISITOR_SPAWN_DELAY_SEC = 0.3;
 
 /**
  * Параметры сложности + состояние сессии.

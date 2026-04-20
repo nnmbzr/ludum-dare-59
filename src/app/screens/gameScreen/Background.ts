@@ -24,6 +24,13 @@ function holstFollowWeight(dist: number, inner: number, outer: number): number {
   return t * t * (3 - 2 * t);
 }
 
+export const BACKGROUND_ANIMATIONS = {
+  IDLE: 'idle',
+  LIGHT_SCREENS_OFF: 'light_screens_off',
+  LIGHT_SCREENS_ON: 'light_screens_on',
+} as const;
+type BACKGROUND_ANIMATIONS = ValuesOf<typeof BACKGROUND_ANIMATIONS>;
+
 export const BACKGROUND_SLOTS = {
   CLOCK: 'Container_Timer',
   FAX: 'Container_Fax',
@@ -63,7 +70,7 @@ export class Background extends Container {
     this.fisheyeFilter.mouseRange = 0.25;
     this.spine.filters = [this.fisheyeFilter];
 
-    this.spine.state.setAnimation(0, 'animation', true);
+    this.spine.state.setAnimation(0, 'idle', true);
 
     this.addChild(this.spine);
   }
@@ -75,6 +82,7 @@ export class Background extends Container {
   private layoutBackgroundSpine() {
     this.spine.update(0);
     const lb = this.spine.getLocalBounds();
+
     if (lb.width <= 1e-4 || lb.height <= 1e-4) {
       this.spine.pivot.set(0, 0);
       this.spine.position.set(SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5);
