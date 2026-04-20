@@ -5,8 +5,8 @@ export const ERASER_LIVE_FILL = 0xd4c9b8;
 export const ERASER_LIVE_FILL_ALPHA = 0.72;
 
 import { engine } from '@/app/getEngine';
+import type { PartIds } from '@/shared/serverTypes';
 import { Rectangle, type Ticker } from 'pixi.js';
-import type { SkinSet } from '../types';
 import { DrawingPadController } from './DrawingPadController';
 import { GameDrawingBoard } from './GameDrawingBoard';
 import { StampController } from './StampController';
@@ -81,7 +81,7 @@ export class Drawing {
     return this.board.resume();
   }
 
-  public beginNewSheet(skins: SkinSet): void {
+  public beginNewSheet(skins: PartIds): void {
     this.board.beginNewSheet(skins);
   }
 
@@ -130,7 +130,7 @@ export class Drawing {
     this.stampButtonPressPromise = null;
   }
 
-  public set onSubmitted(cb: (data: string, skins: SkinSet) => void) {
+  public set onSubmitted(cb: (data: string, skins: PartIds) => void) {
     this.board.onSubmitted = cb;
   }
 
