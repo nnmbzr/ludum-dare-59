@@ -1,8 +1,19 @@
 import { engine } from '@/app/getEngine';
 import gsap from 'gsap';
-import { Container, type FederatedPointerEvent, Graphics, Point, Rectangle, Text, type Ticker } from 'pixi.js';
+import {
+  Container,
+  type FederatedPointerEvent,
+  Graphics,
+  Point,
+  Rectangle,
+  Sprite,
+  Text,
+  Texture,
+  type Ticker,
+} from 'pixi.js';
 import type { SkinSet } from '../types';
 import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
+
 const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
 
@@ -12,51 +23,26 @@ const THICKNESS_PRESETS = [
   { r0: 8, r1: 16 },
 ] as const;
 
-const UI_PAD = 10;
-const UI_W = 168;
-const TEMPLATE_CHIP = 52;
-const TEMPLATE_GAP = 8;
-const TOOLS_Y = 52;
-const TOOL_ROW_H = 38;
-const THICKNESS_Y = TOOLS_Y + TOOL_ROW_H + 6;
-const THICKNESS_ROW_H = 32;
-const TEMPLATES_TOP = THICKNESS_Y + THICKNESS_ROW_H + 12;
-const PANEL_BOTTOM_PAD = 18;
-const TEMPLATE_ROWS = 3;
-const UI_PANEL_H =
-  TEMPLATES_TOP + TEMPLATE_ROWS * TEMPLATE_CHIP + (TEMPLATE_ROWS - 1) * TEMPLATE_GAP + PANEL_BOTTOM_PAD;
-const PLACED_SCALE = 1.35;
-const TEMPLATE_NAV_ARROW_W = 22;
-const TEMPLATE_NAV_GAP = 6;
+/** Короткие алиасы AssetPack (`createShortcuts` + `trimExtensions`). */
+const DRAWING_TEX = {
+  paper: 'paper_template',
+  arrow: 'arrow',
+  head: (i: number) => `head_template_${i}`,
+} as const;
 
-type TemplateKind =
-  | 'heart'
-  | 'heart_crimson'
-  | 'heart_wire'
-  | 'star'
-  | 'star_sapphire'
-  | 'star_silver'
-  | 'cloud'
-  | 'cloud_storm'
-  | 'cloud_candy';
-
-const TEMPLATE_CATALOG: readonly (readonly TemplateKind[])[] = [
-  ['heart', 'heart_crimson', 'heart_wire'],
-  ['star', 'star_sapphire', 'star_silver'],
-  ['cloud', 'cloud_storm', 'cloud_candy'],
-] as const;
+const HEAD_TEMPLATE_COUNT = 5;
 
 const STROKE_LIVE_POINT_CAP = 340;
 const STROKE_LIVE_KEEP = 40;
 
-const UI_SHOW_IN_DUR = 0.34;
-const UI_SHOW_RECOIL_DUR = 0.12;
-const UI_SHOW_RETURN_DUR = 0.1;
-const UI_SHOW_RECOIL_PX = 10;
-
 const MARGIN_FROM_BOTTOM = 48;
 
-type DrawTool = 'brush' | 'eraser';
+const TEMPLATE_NAV_BTN_W = 44;
+const TEMPLATE_NAV_BTN_H = 52;
+const TEMPLATE_TOP_PAD = 44;
+const TEMPLATE_SIDE_PAD = 8;
+
+export type DrawTool = 'brush' | 'eraser';
 
 export class GameDrawingBoard extends Container {
   private paused = false;
@@ -64,14 +50,17 @@ export class GameDrawingBoard extends Container {
   public onSubmitted: (data: string, skins: SkinSet) => void = () => {};
 
   private board: Container;
-  private bg: Graphics;
+  private bg: Sprite;
   /** Один слой: кисть и ластик в порядке рисования, чтобы после стирания снова можно было рисовать сверху. */
   private inkStrokesLayer: Container;
   private placedTemplatesLayer: Container;
+  private templateSprite: Sprite;
+  private templateLeftBtn!: Container;
+  private templateRightBtn!: Container;
+  private templateIndexLabel!: Text;
   private activeStroke: Graphics;
   private hoverDot: Graphics;
   private boardHolstMask: Graphics;
-  private uiDock!: Container;
 
   private readonly strokeChunks: Graphics[] = [];
   private readonly strokePoints: { x: number; y: number; tSec: number }[] = [];
@@ -87,30 +76,12 @@ export class GameDrawingBoard extends Container {
   /** Для ластика: до какого индекса в `strokePoints` уже запечено в `strokeBakeAccum` (не считая кончик). */
   private eraserNextBakeIndex = 0;
 
-  private toolBrushBg!: Graphics;
-  private toolEraserBg!: Graphics;
-  private readonly thickBgs: Graphics[] = [];
-
   private stageDragAttached = false;
   private canvasHolstPointerAttached = false;
   private pointerOverBoard = false;
   private lastHover = { x: CANVAS_W * 0.5, y: CANVAS_H * 0.5 };
 
-  private uiDockShown = false;
-  private uiDockTargetX = 0;
-  private uiDockHiddenX = 0;
-
-  private dragCat: number | null = null;
-  private dragTemplateKind: TemplateKind | null = null;
-  private dragGhost: Container | null = null;
-  private dragGrabOnChip = { x: TEMPLATE_CHIP * 0.5, y: TEMPLATE_CHIP * 0.5 };
-  private stageTemplateDrag = false;
-  private readonly onStageTemplateMove = (e: FederatedPointerEvent) => this.handleTemplateDragMove(e);
-  private readonly onStageTemplateUp = (e: FederatedPointerEvent) => this.handleTemplateDragUp(e);
-
-  private readonly categoryVariantIx = [0, 0, 0];
-  private readonly placedByCategory: (Container | null)[] = [null, null, null];
-  private readonly templateRowPreviewGfx: (Graphics | undefined)[] = [];
+  private headTemplateIndex = 0;
 
   private readonly onDomCanvasPointerMove = (ev: PointerEvent) => {
     const app = engine();
@@ -126,11 +97,9 @@ export class GameDrawingBoard extends Container {
 
   private readonly onDomCanvasPointerLeave = () => {
     if (this.isDrawing || this.paused) return;
-    if (this.stageTemplateDrag) return;
     if (this.pointerOverBoard) {
       this.pointerOverBoard = false;
       this.hideHoverDot();
-      this.hideUiDock();
     }
   };
 
@@ -143,20 +112,18 @@ export class GameDrawingBoard extends Container {
       this.lastHover = c;
       if (!this.pointerOverBoard) {
         this.pointerOverBoard = true;
-        this.showUiDock();
       }
       this.moveHoverDot(c.x, c.y);
     } else {
-      if (this.stageTemplateDrag) return;
       if (this.pointerOverBoard) {
         this.pointerOverBoard = false;
         this.hideHoverDot();
-        this.hideUiDock();
       }
     }
   }
+
   private readonly onBoardDown = (e: FederatedPointerEvent) => {
-    if (this.isUnderUiDock(e.target as Container)) return;
+    if (this.isTemplateNavTarget(e.target as Container)) return;
     const p = this.localOnBoard(e);
     this.beginStroke(p);
   };
@@ -167,6 +134,7 @@ export class GameDrawingBoard extends Container {
     this.lastHover = p;
     this.appendStrokePoint(p.x, p.y);
   };
+
   private readonly onStageUp = (_e: FederatedPointerEvent) => {
     this.endStroke();
   };
@@ -180,16 +148,20 @@ export class GameDrawingBoard extends Container {
     this.board.cursor = 'none';
     this.board.hitArea = new Rectangle(0, 0, CANVAS_W, CANVAS_H);
 
-    this.bg = new Graphics();
-    this.bg.label = 'drawing_bg';
+    this.bg = new Sprite({ texture: Texture.from(DRAWING_TEX.paper), label: 'drawing_bg' });
     this.bg.eventMode = 'none';
-    this.bg.rect(0, 0, CANVAS_W, CANVAS_H).fill({ color: BOARD_BG, alpha: 1 });
+    this.bg.setSize(CANVAS_W, CANVAS_H);
     this.board.addChild(this.bg);
 
     this.placedTemplatesLayer = new Container();
     this.placedTemplatesLayer.label = 'drawing_placed_templates';
     this.placedTemplatesLayer.eventMode = 'none';
     this.board.addChild(this.placedTemplatesLayer);
+
+    this.templateSprite = new Sprite({ texture: Texture.from(DRAWING_TEX.head(1)), label: 'drawing_head_template' });
+    this.templateSprite.eventMode = 'none';
+    this.templateSprite.anchor.set(0.5);
+    this.placedTemplatesLayer.addChild(this.templateSprite);
 
     this.inkStrokesLayer = new Container();
     this.inkStrokesLayer.label = 'drawing_ink_strokes';
@@ -201,7 +173,10 @@ export class GameDrawingBoard extends Container {
     this.activeStroke.eventMode = 'none';
     this.inkStrokesLayer.addChild(this.activeStroke);
 
+    this.setupTemplateControls();
+
     this.hoverDot = new Graphics();
+    this.hoverDot.label = 'drawing_hover_dot';
     this.hoverDot.eventMode = 'none';
     this.hoverDot.visible = false;
     this.board.addChild(this.hoverDot);
@@ -213,308 +188,114 @@ export class GameDrawingBoard extends Container {
     this.board.addChild(this.boardHolstMask);
     this.board.mask = this.boardHolstMask;
 
-    this.buildUiDock();
+    this.layoutHeadTemplate();
+    this.refreshTemplateIndexLabel();
 
     this.addChild(this.board);
   }
 
-  private buildUiDock() {
-    this.uiDock = new Container();
-    this.uiDock.label = 'drawing_ui_dock';
-    this.uiDock.eventMode = 'static';
-    this.uiDock.visible = false;
+  private setupTemplateControls() {
+    const mkArrow = (dir: -1 | 1) => {
+      const c = new Container();
+      c.eventMode = 'static';
+      c.cursor = 'pointer';
+      c.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_BTN_W, TEMPLATE_NAV_BTN_H);
+      const s = new Sprite({ texture: Texture.from(DRAWING_TEX.arrow) });
+      s.anchor.set(0.5);
+      s.position.set(TEMPLATE_NAV_BTN_W * 0.5, TEMPLATE_NAV_BTN_H * 0.5);
+      if (dir < 0) {
+        s.scale.x = -1;
+      }
+      c.addChild(s);
+      return c;
+    };
 
-    const panel = new Graphics()
-      .roundRect(0, 0, UI_W, UI_PANEL_H, 10)
-      .fill({ color: 0x2c2c32, alpha: 0.94 })
-      .stroke({ width: 1, color: 0x5a5a66, alpha: 0.9 });
-    this.uiDock.addChild(panel);
+    /* Текстура стрелки смотрит влево: слева без зеркала — наружу, справа с зеркалом — наружу. */
+    /* Справа — следующий шаблон (1→2→…), слева — предыдущий. */
+    this.templateRightBtn = mkArrow(-1);
+    this.templateRightBtn.label = 'drawing_template_next';
+    this.templateRightBtn.position.set(
+      CANVAS_W - TEMPLATE_SIDE_PAD - TEMPLATE_NAV_BTN_W,
+      (CANVAS_H - TEMPLATE_NAV_BTN_H) * 0.5,
+    );
+    this.templateRightBtn.on('pointertap', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.cycleHeadTemplate(1);
+    });
+    this.board.addChild(this.templateRightBtn);
 
-    const undoBtn = new Container();
-    undoBtn.label = 'drawing_undo';
-    undoBtn.eventMode = 'static';
-    undoBtn.cursor = 'pointer';
-    undoBtn.hitArea = new Rectangle(0, 0, UI_W - 16, 36);
-    const undoBg = new Graphics()
-      .roundRect(0, 0, UI_W - 16, 36, 6)
-      .fill({ color: 0x3d5a80, alpha: 1 })
-      .stroke({ width: 1, color: 0x7aa0cc, alpha: 0.6 });
-    undoBtn.addChild(undoBg);
-    const undoText = new Text({
-      text: 'Undo line',
-      style: { fill: 0xf0f4fa, fontFamily: 'sans-serif', fontSize: 14 },
+    this.templateLeftBtn = mkArrow(1);
+    this.templateLeftBtn.label = 'drawing_template_prev';
+    this.templateLeftBtn.position.set(TEMPLATE_SIDE_PAD, (CANVAS_H - TEMPLATE_NAV_BTN_H) * 0.5);
+    this.templateLeftBtn.on('pointertap', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.cycleHeadTemplate(-1);
     });
-    undoText.anchor.set(0.5);
-    undoText.position.set((UI_W - 16) * 0.5, 18);
-    undoBtn.addChild(undoText);
-    undoBtn.position.set(8, 10);
-    undoBtn.on('pointertap', () => {
-      this.undoLastStroke();
-    });
-    undoBtn.on('pointerover', () => {
-      undoBg
-        .clear()
-        .roundRect(0, 0, UI_W - 16, 36, 6)
-        .fill({ color: 0x4a6fa0, alpha: 1 })
-        .stroke({ width: 1, color: 0x9ab8e0, alpha: 0.7 });
-    });
-    undoBtn.on('pointerout', () => {
-      undoBg
-        .clear()
-        .roundRect(0, 0, UI_W - 16, 36, 6)
-        .fill({ color: 0x3d5a80, alpha: 1 })
-        .stroke({ width: 1, color: 0x7aa0cc, alpha: 0.6 });
-    });
-    this.uiDock.addChild(undoBtn);
+    this.board.addChild(this.templateLeftBtn);
 
-    const toolsTitle = new Text({
-      text: 'Tool',
-      style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
+    this.templateIndexLabel = new Text({
+      text: '#1',
+      style: {
+        fill: 0x3a3a3a,
+        fontFamily: 'sans-serif',
+        fontSize: 18,
+        fontWeight: '600',
+      },
     });
-    toolsTitle.position.set(10, TOOLS_Y - 18);
-    this.uiDock.addChild(toolsTitle);
+    this.templateIndexLabel.label = 'drawing_template_index';
+    this.templateIndexLabel.anchor.set(1, 0);
+    this.templateIndexLabel.position.set(CANVAS_W - 14, 10);
+    this.templateIndexLabel.eventMode = 'none';
+    this.board.addChild(this.templateIndexLabel);
+  }
 
-    const brushBtn = new Container();
-    brushBtn.label = 'drawing_tool_brush';
-    brushBtn.eventMode = 'static';
-    brushBtn.cursor = 'pointer';
-    const bw = this.toolSlotW();
-    brushBtn.hitArea = new Rectangle(0, 0, bw, TOOL_ROW_H);
-    this.toolBrushBg = new Graphics();
-    this.paintToolSlotBg(this.toolBrushBg, bw, TOOL_ROW_H, true);
-    brushBtn.addChild(this.toolBrushBg);
-    const brushLabel = new Text({
-      text: 'Brush',
-      style: { fill: 0xf0f4fa, fontFamily: 'sans-serif', fontSize: 13 },
-    });
-    brushLabel.anchor.set(0.5);
-    brushLabel.position.set(bw * 0.5, TOOL_ROW_H * 0.5);
-    brushBtn.addChild(brushLabel);
-    brushBtn.position.set(8, TOOLS_Y);
-    brushBtn.on('pointertap', () => this.setDrawTool('brush'));
-    this.uiDock.addChild(brushBtn);
-
-    const eraserBtn = new Container();
-    eraserBtn.label = 'drawing_tool_eraser';
-    eraserBtn.eventMode = 'static';
-    eraserBtn.cursor = 'pointer';
-    eraserBtn.hitArea = new Rectangle(0, 0, bw, TOOL_ROW_H);
-    this.toolEraserBg = new Graphics();
-    this.paintToolSlotBg(this.toolEraserBg, bw, TOOL_ROW_H, false);
-    eraserBtn.addChild(this.toolEraserBg);
-    const eraserLabel = new Text({
-      text: 'Eraser',
-      style: { fill: 0xf0f4fa, fontFamily: 'sans-serif', fontSize: 13 },
-    });
-    eraserLabel.anchor.set(0.5);
-    eraserLabel.position.set(bw * 0.5, TOOL_ROW_H * 0.5);
-    eraserBtn.addChild(eraserLabel);
-    eraserBtn.position.set(8 + bw + 6, TOOLS_Y);
-    eraserBtn.on('pointertap', () => this.setDrawTool('eraser'));
-    this.uiDock.addChild(eraserBtn);
-
-    const thickTitle = new Text({
-      text: 'Line width',
-      style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
-    });
-    thickTitle.position.set(10, THICKNESS_Y - 18);
-    this.uiDock.addChild(thickTitle);
-
-    const thickGap = 6;
-    const thickW = this.thickSlotW();
-    for (let i = 0; i < 3; i++) {
-      const box = new Container();
-      box.label = `drawing_thickness_${i}`;
-      box.eventMode = 'static';
-      box.cursor = 'pointer';
-      box.hitArea = new Rectangle(0, 0, thickW, THICKNESS_ROW_H);
-      const bg = new Graphics();
-      this.paintThickSlotBg(bg, thickW, THICKNESS_ROW_H, false);
-      box.addChild(bg);
-      this.thickBgs.push(bg);
-      const pr = THICKNESS_PRESETS[i]!;
-      const preview = new Graphics();
-      const cy = THICKNESS_ROW_H * 0.5;
-      const cx = thickW * 0.5;
-      preview
-        .circle(cx, cy, pr.r0)
-        .fill({ color: 0x1a1a1a, alpha: 0.9 })
-        .stroke({ width: 1, color: 0xffffff, alpha: 0.35 });
-      box.addChild(preview);
-      box.position.set(8 + i * (thickW + thickGap), THICKNESS_Y);
-      const ix = i;
-      box.on('pointertap', () => this.setThicknessIx(ix));
-      this.uiDock.addChild(box);
+  private isTemplateNavTarget(target: Container | null | undefined): boolean {
+    let o: Container | null = target ?? null;
+    while (o) {
+      if (o === this.templateLeftBtn || o === this.templateRightBtn) return true;
+      o = o.parent;
     }
-
-    const tplTitle = new Text({
-      text: 'Templates',
-      style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
-    });
-    tplTitle.position.set(10, TEMPLATES_TOP - 18);
-    this.uiDock.addChild(tplTitle);
-
-    let y = TEMPLATES_TOP;
-    for (let cat = 0; cat < TEMPLATE_CATALOG.length; cat++) {
-      const row = this.buildTemplateNavRow(cat);
-      row.position.set(0, y);
-      this.uiDock.addChild(row);
-      y += TEMPLATE_CHIP + TEMPLATE_GAP;
-    }
-
-    this.uiDockTargetX = CANVAS_W - UI_W - UI_PAD;
-    this.uiDockHiddenX = CANVAS_W;
-    this.uiDock.position.set(this.uiDockHiddenX, UI_PAD);
-    this.board.addChild(this.uiDock);
-    this.refreshToolChrome();
+    return false;
   }
 
-  private toolSlotW() {
-    return (UI_W - 24 - 6) * 0.5;
+  private cycleHeadTemplate(delta: number) {
+    if (this.isDrawing) return;
+    const n = HEAD_TEMPLATE_COUNT;
+    this.headTemplateIndex = (this.headTemplateIndex + delta + n * 16) % n;
+    this.templateSprite.texture = Texture.from(DRAWING_TEX.head(this.headTemplateIndex + 1));
+    this.layoutHeadTemplate();
+    this.refreshTemplateIndexLabel();
   }
 
-  private thickSlotW() {
-    return (UI_W - 16 - 6 * 2) / 3;
+  private layoutHeadTemplate() {
+    const tw = this.templateSprite.texture.width;
+    const th = this.templateSprite.texture.height;
+    if (tw <= 0 || th <= 0) return;
+
+    const maxW = CANVAS_W - TEMPLATE_SIDE_PAD * 2 - TEMPLATE_NAV_BTN_W * 2 - 16;
+    const maxH = CANVAS_H - TEMPLATE_TOP_PAD - 24;
+    const s = Math.min(maxW / tw, maxH / th);
+    this.templateSprite.scale.set(s);
+    this.templateSprite.position.set(CANVAS_W * 0.5, TEMPLATE_TOP_PAD + maxH * 0.5);
   }
 
-  private paintToolSlotBg(g: Graphics, w: number, h: number, active: boolean) {
-    g.clear();
-    g.roundRect(0, 0, w, h, 6)
-      .fill({ color: active ? 0x4a6b94 : 0x353540, alpha: 1 })
-      .stroke({
-        width: active ? 2 : 1,
-        color: active ? 0xa8c8ec : 0x6a6a78,
-        alpha: active ? 0.85 : 0.5,
-      });
+  private refreshTemplateIndexLabel() {
+    this.templateIndexLabel.text = `#${this.headTemplateIndex + 1}`;
   }
 
-  private paintThickSlotBg(g: Graphics, w: number, h: number, active: boolean) {
-    g.clear();
-    g.roundRect(0, 0, w, h, 6)
-      .fill({ color: active ? 0x4a6b94 : 0x353540, alpha: 1 })
-      .stroke({
-        width: active ? 2 : 1,
-        color: active ? 0xa8c8ec : 0x6a6a78,
-        alpha: active ? 0.85 : 0.5,
-      });
-  }
-
-  private refreshToolChrome() {
-    const tw = this.toolSlotW();
-    this.paintToolSlotBg(this.toolBrushBg, tw, TOOL_ROW_H, this.drawTool === 'brush');
-    this.paintToolSlotBg(this.toolEraserBg, tw, TOOL_ROW_H, this.drawTool === 'eraser');
-    const w = this.thickSlotW();
-    for (let i = 0; i < this.thickBgs.length; i++) {
-      this.paintThickSlotBg(this.thickBgs[i]!, w, THICKNESS_ROW_H, i === this.thicknessIx);
-    }
-  }
-
-  private setDrawTool(t: DrawTool) {
+  public setDrawTool(t: DrawTool): void {
     if (this.isDrawing) return;
     if (this.drawTool === t) return;
     this.drawTool = t;
-    this.refreshToolChrome();
     if (this.pointerOverBoard && !this.isDrawing) this.refreshHoverDot();
   }
 
-  private setThicknessIx(ix: number) {
+  public setThicknessIx(ix: number): void {
     if (this.isDrawing) return;
     if (ix < 0 || ix >= THICKNESS_PRESETS.length) return;
     if (this.thicknessIx === ix) return;
     this.thicknessIx = ix;
-    this.refreshToolChrome();
     if (this.pointerOverBoard && !this.isDrawing) this.refreshHoverDot();
-  }
-
-  private buildTemplateNavRow(cat: number): Container {
-    const row = new Container();
-    row.label = `template_row_${cat}`;
-
-    const rowW = TEMPLATE_NAV_ARROW_W * 2 + TEMPLATE_NAV_GAP * 2 + TEMPLATE_CHIP;
-    const rowX = (UI_W - rowW) * 0.5;
-
-    const left = new Container();
-    left.label = `template_nav_left_${cat}`;
-    left.eventMode = 'static';
-    left.cursor = 'pointer';
-    left.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP);
-    const leftBg = new Graphics()
-      .roundRect(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP, 6)
-      .fill({ color: 0x3a3a44, alpha: 1 })
-      .stroke({ width: 1, color: 0x6a6a78, alpha: 0.55 });
-    left.addChild(leftBg);
-    const leftTxt = new Text({
-      text: '‹',
-      style: { fill: 0xe8eaef, fontFamily: 'sans-serif', fontSize: 22 },
-    });
-    leftTxt.anchor.set(0.5);
-    leftTxt.position.set(TEMPLATE_NAV_ARROW_W * 0.5, TEMPLATE_CHIP * 0.5);
-    left.addChild(leftTxt);
-    left.position.set(rowX, 0);
-    left.on('pointertap', () => this.cycleTemplateCategory(cat, -1));
-    row.addChild(left);
-
-    const chip = new Container();
-    chip.label = `template_chip_cat_${cat}`;
-    chip.eventMode = 'static';
-    chip.cursor = 'grab';
-    chip.hitArea = new Rectangle(0, 0, TEMPLATE_CHIP, TEMPLATE_CHIP);
-    chip.position.set(rowX + TEMPLATE_NAV_ARROW_W + TEMPLATE_NAV_GAP, 0);
-    const preview = new Graphics();
-    this.templateRowPreviewGfx[cat] = preview;
-    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
-    drawTemplateShape(preview, kind, TEMPLATE_CHIP);
-    chip.addChild(preview);
-    chip.on('pointerdown', (e: FederatedPointerEvent) => {
-      e.stopPropagation();
-      this.beginTemplateDrag(cat, chip, e);
-    });
-    row.addChild(chip);
-
-    const right = new Container();
-    right.label = `template_nav_right_${cat}`;
-    right.eventMode = 'static';
-    right.cursor = 'pointer';
-    right.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP);
-    const rightBg = new Graphics()
-      .roundRect(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP, 6)
-      .fill({ color: 0x3a3a44, alpha: 1 })
-      .stroke({ width: 1, color: 0x6a6a78, alpha: 0.55 });
-    right.addChild(rightBg);
-    const rightTxt = new Text({
-      text: '›',
-      style: { fill: 0xe8eaef, fontFamily: 'sans-serif', fontSize: 22 },
-    });
-    rightTxt.anchor.set(0.5);
-    rightTxt.position.set(TEMPLATE_NAV_ARROW_W * 0.5, TEMPLATE_CHIP * 0.5);
-    right.addChild(rightTxt);
-    right.position.set(rowX + TEMPLATE_NAV_ARROW_W + TEMPLATE_NAV_GAP + TEMPLATE_CHIP + TEMPLATE_NAV_GAP, 0);
-    right.on('pointertap', () => this.cycleTemplateCategory(cat, 1));
-    row.addChild(right);
-
-    return row;
-  }
-
-  private cycleTemplateCategory(cat: number, delta: number) {
-    if (this.isDrawing) return;
-    const list = TEMPLATE_CATALOG[cat];
-    if (!list?.length) return;
-    const n = list.length;
-    this.categoryVariantIx[cat] = (this.categoryVariantIx[cat] + delta + n * 16) % n;
-    this.refreshTemplateRowPreview(cat);
-    const placed = this.placedByCategory[cat];
-    if (placed) {
-      const g = placed.getChildAt(0) as Graphics;
-      const kind = list[this.categoryVariantIx[cat]!]!;
-      drawTemplateShape(g, kind, TEMPLATE_CHIP * PLACED_SCALE);
-    }
-  }
-
-  private refreshTemplateRowPreview(cat: number) {
-    const gfx = this.templateRowPreviewGfx[cat];
-    if (!gfx) return;
-    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
-    drawTemplateShape(gfx, kind, TEMPLATE_CHIP);
   }
 
   private addStrokeChunkBeforeActive(parent: Container, activeG: Graphics, chunk: Graphics) {
@@ -522,153 +303,8 @@ export class GameDrawingBoard extends Container {
     parent.addChildAt(chunk, i);
   }
 
-  private beginTemplateDrag(cat: number, chip: Container, e: FederatedPointerEvent) {
-    if (this.dragGhost) return;
-    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
-    const lp = this.board.toLocal(e.global);
-    const localOnChip = chip.toLocal(e.global);
-    this.dragGrabOnChip = {
-      x: Math.max(0, Math.min(TEMPLATE_CHIP, localOnChip.x)),
-      y: Math.max(0, Math.min(TEMPLATE_CHIP, localOnChip.y)),
-    };
-    this.dragCat = cat;
-    this.dragTemplateKind = kind;
-    this.stageTemplateDrag = true;
-    this.dragGhost = new Container();
-    this.dragGhost.label = 'template_drag_ghost';
-    this.dragGhost.eventMode = 'none';
-    const g = new Graphics();
-    drawTemplateShape(g, kind, TEMPLATE_CHIP);
-    this.dragGhost.addChild(g);
-    this.dragGhost.position.set(lp.x - this.dragGrabOnChip.x, lp.y - this.dragGrabOnChip.y);
-    this.board.addChild(this.dragGhost);
-
-    const st = engine().stage;
-    st.on('pointermove', this.onStageTemplateMove);
-    st.on('pointerup', this.onStageTemplateUp);
-    st.on('pointerupoutside', this.onStageTemplateUp);
-  }
-
-  private handleTemplateDragMove(e: FederatedPointerEvent) {
-    if (!this.dragGhost) return;
-    const lp = this.board.toLocal(e.global);
-    this.dragGhost.position.set(lp.x - this.dragGrabOnChip.x, lp.y - this.dragGrabOnChip.y);
-  }
-
-  private handleTemplateDragUp(e: FederatedPointerEvent) {
-    if (!this.dragGhost || this.dragCat === null || this.dragTemplateKind === null) {
-      this.cleanupTemplateDrag();
-      return;
-    }
-    const lp = this.board.toLocal(e.global);
-    const x = lp.x;
-    const y = lp.y;
-
-    const onCanvas = x >= 0 && x <= CANVAS_W && y >= 0 && y <= CANVAS_H && !this.pointInUiDock(lp.x, lp.y);
-
-    if (onCanvas) {
-      const cat = this.dragCat;
-      const placedSize = TEMPLATE_CHIP * PLACED_SCALE;
-      const ox = (this.dragGrabOnChip.x / TEMPLATE_CHIP) * placedSize;
-      const oy = (this.dragGrabOnChip.y / TEMPLATE_CHIP) * placedSize;
-      const existing = this.placedByCategory[cat];
-      if (existing) {
-        this.placedTemplatesLayer.removeChild(existing);
-        existing.destroy({ children: true });
-        this.placedByCategory[cat] = null;
-      }
-      const placed = new Container();
-      placed.label = `placed_cat${cat}_${this.dragTemplateKind}`;
-      placed.eventMode = 'none';
-      placed.position.set(x - ox, y - oy);
-      const g = new Graphics();
-      drawTemplateShape(g, this.dragTemplateKind, placedSize);
-      placed.addChild(g);
-      this.placedTemplatesLayer.addChild(placed);
-      this.placedByCategory[cat] = placed;
-    }
-
-    this.dragGhost.destroy({ children: true });
-    this.dragGhost = null;
-    this.dragCat = null;
-    this.dragTemplateKind = null;
-    this.cleanupTemplateDrag();
-
-    if (!this.pointerOverBoard) this.hideUiDock();
-  }
-
-  private cleanupTemplateDrag() {
-    this.stageTemplateDrag = false;
-    const st = engine().stage;
-    st.off('pointermove', this.onStageTemplateMove);
-    st.off('pointerup', this.onStageTemplateUp);
-    st.off('pointerupoutside', this.onStageTemplateUp);
-  }
-
-  private pointInUiDock(boardX: number, boardY: number): boolean {
-    const b = this.uiDock.getBounds();
-    return boardX >= b.x && boardX <= b.x + b.width && boardY >= b.y && boardY <= b.y + b.height;
-  }
-
-  private isUnderUiDock(target: Container | null | undefined): boolean {
-    let o: Container | null = target ?? null;
-    while (o) {
-      if (o === this.uiDock) return true;
-      o = o.parent;
-    }
-    return false;
-  }
-
-  private showUiDock() {
-    if (this.uiDockShown) return;
-    this.uiDockShown = true;
-    this.uiDock.visible = true;
-    gsap.killTweensOf(this.uiDock.position);
-    this.uiDock.position.x = this.uiDockHiddenX;
-    const tx = this.uiDockTargetX;
-    const recoil = UI_SHOW_RECOIL_PX;
-    gsap
-      .timeline()
-      .to(this.uiDock.position, { x: tx, duration: UI_SHOW_IN_DUR, ease: 'power4.out' })
-      .to(this.uiDock.position, { x: tx + recoil, duration: UI_SHOW_RECOIL_DUR, ease: 'power2.out' })
-      .to(this.uiDock.position, { x: tx, duration: UI_SHOW_RETURN_DUR, ease: 'sine.inOut' });
-  }
-
-  private hideUiDock() {
-    const pos = this.uiDock.position;
-    const hidden = this.uiDockHiddenX;
-    if (!this.uiDock.visible && Math.abs(pos.x - hidden) < 0.5) return;
-
-    this.uiDockShown = false;
-    gsap.killTweensOf(pos);
-    this.uiDock.visible = true;
-
-    const tx = this.uiDockTargetX;
-    const recoil = UI_SHOW_RECOIL_PX;
-    if (pos.x < tx) pos.x = tx;
-    if (pos.x > tx + recoil) pos.x = tx + recoil;
-
-    gsap
-      .timeline({
-        onComplete: () => {
-          if (this.pointerOverBoard) {
-            this.showUiDock();
-            return;
-          }
-          pos.x = hidden;
-          this.uiDock.visible = false;
-        },
-      })
-      .to(pos, { x: tx + recoil, duration: UI_SHOW_RETURN_DUR, ease: 'sine.inOut' })
-      .to(pos, { x: tx, duration: UI_SHOW_RECOIL_DUR, ease: 'power2.in' })
-      .to(pos, { x: hidden, duration: UI_SHOW_IN_DUR, ease: 'power4.in' });
-  }
-
   public hideUiDockInstant() {
-    this.uiDockShown = false;
-    gsap.killTweensOf(this.uiDock.position);
-    this.uiDock.position.set(this.uiDockHiddenX, UI_PAD);
-    this.uiDock.visible = false;
+    /* UI планшета вынесен в Spine слева; метод оставлен для совместимости с DrawingScreen / Drawing. */
   }
 
   private undoLastStroke() {
@@ -676,6 +312,12 @@ export class GameDrawingBoard extends Container {
     if (g) {
       g.destroy({ children: true });
     }
+  }
+
+  /** Вызывается из UI слева (планшет / Spine). */
+  public undoLastStrokeFromUi(): void {
+    if (this.isDrawing) return;
+    this.undoLastStroke();
   }
 
   public getHolstCenterVirtual(): { x: number; y: number } {
@@ -691,7 +333,6 @@ export class GameDrawingBoard extends Container {
   public activate(): void {
     this.detachStageDrag();
     this.detachCanvasHolstPointer();
-    this.cleanupTemplateDrag();
     this.board.off('pointerdown', this.onBoardDown);
     this.board.on('pointerdown', this.onBoardDown);
     this.attachCanvasHolstPointer();
@@ -723,7 +364,6 @@ export class GameDrawingBoard extends Container {
   public reset() {
     this.detachStageDrag();
     this.detachCanvasHolstPointer();
-    this.cleanupTemplateDrag();
     this.endStroke();
     this.hideUiDockInstant();
     this.board.off('pointerdown', this.onBoardDown);
@@ -733,14 +373,6 @@ export class GameDrawingBoard extends Container {
         (ch as Graphics).destroy({ children: true });
       }
     }
-    this.placedTemplatesLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
-    this.placedByCategory.fill(null);
-    this.categoryVariantIx[0] = 0;
-    this.categoryVariantIx[1] = 0;
-    this.categoryVariantIx[2] = 0;
-    for (let c = 0; c < TEMPLATE_CATALOG.length; c++) {
-      this.refreshTemplateRowPreview(c);
-    }
     this.activeStroke.clear();
     this.strokePoints.length = 0;
     this.hideHoverDot();
@@ -748,7 +380,10 @@ export class GameDrawingBoard extends Container {
     this.drawTool = 'brush';
     this.thicknessIx = 1;
     this.eraserNextBakeIndex = 0;
-    this.refreshToolChrome();
+    this.headTemplateIndex = 0;
+    this.templateSprite.texture = Texture.from(DRAWING_TEX.head(1));
+    this.layoutHeadTemplate();
+    this.refreshTemplateIndexLabel();
   }
 
   public async pause() {
@@ -869,7 +504,6 @@ export class GameDrawingBoard extends Container {
       }
     }
     if (this.liveStrokeIsEraser) {
-      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints.slice(0, nMove));
       this.eraserNextBakeIndex = Math.max(0, this.eraserNextBakeIndex - nMove);
     }
     this.strokePoints.splice(0, nMove);
@@ -888,45 +522,7 @@ export class GameDrawingBoard extends Container {
       const r = this.brushRadiusAt(p.tSec);
       this.strokeBakeAccum.circle(p.x, p.y, r).fill(ink);
     }
-    this.removePlacedTemplatesHitByStrokePoints(this.strokePoints.slice(from, uptoExcl));
     this.eraserNextBakeIndex = uptoExcl;
-  }
-
-  private removePlacedTemplatesHitByStrokePoints(
-    points: readonly { x: number; y: number; tSec: number }[],
-    nowSecForLast?: number,
-  ) {
-    if (points.length === 0) return;
-    const placedSize = TEMPLATE_CHIP * PLACED_SCALE;
-    const layer = this.placedTemplatesLayer;
-    const n = points.length;
-    const victims: Container[] = [];
-    outer: for (const ch of [...layer.children]) {
-      const c = ch as Container;
-      const rx = c.x;
-      const ry = c.y;
-      for (let i = 0; i < n; i++) {
-        const p = points[i]!;
-        let r = this.brushRadiusAt(p.tSec);
-        if (i === n - 1 && nowSecForLast !== undefined) {
-          r = Math.max(r, this.brushRadiusAt(nowSecForLast));
-        }
-        if (circleIntersectsAabb(p.x, p.y, r, rx, ry, placedSize, placedSize)) {
-          victims.push(c);
-          continue outer;
-        }
-      }
-    }
-    for (const c of victims) {
-      for (let cat = 0; cat < this.placedByCategory.length; cat++) {
-        if (this.placedByCategory[cat] === c) {
-          this.placedByCategory[cat] = null;
-          break;
-        }
-      }
-      layer.removeChild(c);
-      c.destroy({ children: true });
-    }
   }
 
   private redrawActiveBrush() {
@@ -971,7 +567,6 @@ export class GameDrawingBoard extends Container {
         }
         g.circle(p.x, p.y, r).fill(ink);
       }
-      this.removePlacedTemplatesHitByStrokePoints(this.strokePoints, nowSec);
       this.strokeChunks.push(g);
       this.strokeBakeAccum = null;
       this.eraserNextBakeIndex = 0;
@@ -1055,172 +650,5 @@ export class GameDrawingBoard extends Container {
     canvas.removeEventListener('pointermove', this.onDomCanvasPointerMove);
     canvas.removeEventListener('pointerleave', this.onDomCanvasPointerLeave);
     this.canvasHolstPointerAttached = false;
-  }
-}
-
-function circleIntersectsAabb(
-  cx: number,
-  cy: number,
-  r: number,
-  rx: number,
-  ry: number,
-  rw: number,
-  rh: number,
-): boolean {
-  const px = Math.max(rx, Math.min(cx, rx + rw));
-  const py = Math.max(ry, Math.min(cy, ry + rh));
-  const dx = cx - px;
-  const dy = cy - py;
-  return dx * dx + dy * dy <= r * r;
-}
-
-function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
-  g.clear();
-  const cx = size * 0.5;
-  const cy = size * 0.5;
-  const stroke = { width: 2, color: 0x1a1a1a, alpha: 1 };
-  switch (kind) {
-    case 'heart': {
-      const s = size * 0.22;
-      g.moveTo(cx, cy + s * 1.2);
-      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
-      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
-      g.closePath();
-      g.fill({ color: 0xff6b8a, alpha: 0.85 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'heart_crimson': {
-      const s = size * 0.22;
-      g.moveTo(cx, cy + s * 1.2);
-      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
-      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
-      g.closePath();
-      g.fill({ color: 0xc62828, alpha: 0.9 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'heart_wire': {
-      const s = size * 0.22;
-      g.moveTo(cx, cy + s * 1.2);
-      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
-      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
-      g.closePath();
-      g.fill({ color: 0xffffff, alpha: 0.01 });
-      g.stroke({ width: 3, color: 0xad1457, alpha: 1 });
-      break;
-    }
-    case 'star': {
-      const spikes = 5;
-      const rOut = size * 0.38;
-      const rIn = rOut * 0.42;
-      for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
-        const rr = i % 2 === 0 ? rOut : rIn;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill({ color: 0xffd54a, alpha: 0.9 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'star_sapphire': {
-      const spikes = 5;
-      const rOut = size * 0.38;
-      const rIn = rOut * 0.42;
-      for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
-        const rr = i % 2 === 0 ? rOut : rIn;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill({ color: 0x3949ab, alpha: 0.92 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'star_silver': {
-      const spikes = 5;
-      const rOut = size * 0.38;
-      const rIn = rOut * 0.42;
-      for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
-        const rr = i % 2 === 0 ? rOut : rIn;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill({ color: 0xb0bec5, alpha: 0.95 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'cloud': {
-      const r0 = size * 0.14;
-      g.circle(cx - size * 0.18, cy, r0 * 1.1)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      break;
-    }
-    case 'cloud_storm': {
-      const r0 = size * 0.14;
-      const fill = { color: 0x78909c, alpha: 0.95 };
-      g.circle(cx - size * 0.18, cy, r0 * 1.1)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
-        .fill(fill)
-        .stroke(stroke);
-      break;
-    }
-    case 'cloud_candy': {
-      const r0 = size * 0.14;
-      const fill = { color: 0xf8bbd0, alpha: 0.95 };
-      g.circle(cx - size * 0.18, cy, r0 * 1.1)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
-        .fill(fill)
-        .stroke(stroke);
-      break;
-    }
-    default:
-      break;
   }
 }

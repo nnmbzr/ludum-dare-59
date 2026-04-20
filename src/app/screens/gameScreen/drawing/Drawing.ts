@@ -7,7 +7,7 @@ export const ERASER_LIVE_FILL_ALPHA = 0.72;
 import type { Ticker } from 'pixi.js';
 import type { SkinSet } from '../types';
 import { DrawingPadController } from './DrawingPadController';
-import { GameDrawingBoard } from './GameDrawingBoard';
+import { type DrawTool, GameDrawingBoard } from './GameDrawingBoard';
 import { StampController } from './StampController';
 
 export class Drawing {
@@ -122,6 +122,18 @@ export class Drawing {
 
   public hideUiDockInstant(): void {
     this.board.hideUiDockInstant();
+  }
+
+  public setDrawTool(tool: DrawTool): void {
+    this.board.setDrawTool(tool);
+  }
+
+  public setBrushThicknessPreset(index: 0 | 1 | 2): void {
+    this.board.setThicknessIx(index);
+  }
+
+  public undoLastStroke(): void {
+    this.board.undoLastStrokeFromUi();
   }
 
   public setBoardNudge(offsetX: number, offsetY: number, scale = 1): void {
