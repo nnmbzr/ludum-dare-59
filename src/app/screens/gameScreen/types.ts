@@ -1,5 +1,6 @@
 import type { ValuesOf } from '@/app/utils/typesHelper';
 import type { PartIds } from '@/shared/serverTypes';
+import type { VisitorManAnimation } from './bigTV/VisitorManController';
 
 export type PatternId = 'eyes' | 'nose' | 'mouth' | 'face' | 'clothes';
 export type SkinId = number;
@@ -7,7 +8,7 @@ export type SkinId = number;
 export interface VisitorData {
   id: string;
   skins: PartIds;
-  idleAnimation: string;
+  idleAnimation: VisitorManAnimation;
   staySec: number;
 }
 

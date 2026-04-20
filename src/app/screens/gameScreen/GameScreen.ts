@@ -2,6 +2,7 @@ import { engine } from '@/app/getEngine';
 import { PausePopup } from '@/app/popups/PausePopup';
 import { DEBUG_GAME_STATE } from '@/dev';
 import type { AppScreen } from '@/engine/navigation/navigation';
+import { randomRange } from '@/engine/utils/random';
 import { waitFor } from '@/engine/utils/waitFor';
 import { MAX_DT } from '@/main';
 import type { PartIds } from '@/shared/serverTypes';
@@ -199,7 +200,7 @@ export class GameScreen extends Container implements AppScreen {
     if (this.spawnDelayMs > 0) {
       this.spawnDelayMs -= deltaMs;
       if (this.spawnDelayMs <= 0) {
-        this.bigTV.triggerAlarm();
+        // this.bigTV.triggerAlarm();
         // FIXME: сейчас мы считаем прямо тут, внутри. Вместо этого нужно перенести логику старта и расчёта задержки в visitor
         // this.setState(GameStates.alarmOn);
       }
@@ -240,16 +241,11 @@ export class GameScreen extends Container implements AppScreen {
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: проверить что это всё устанавливается!!
-        // Календарь показывает текущий день.
-        // Время показывает 00
-        // КВОТА (под часами) показывает необходимую норму для этого дня.
-        // Экраны ничего не показывают (надпись НО СИГНАЛ)
-        // Из контейнера для папки видна папка с бумагой (если она есть)
+        // TODO: ПРОВЕРИТЬ ОТКЛЮЧЕНИЕ РИСОВАНИЯ
         this.startDay();
 
-        // Проходит немного времени (таймер 3-4 секунды)
-        await waitFor(0.5);
+        // Проходит немного времени (таймер 1-2 секунды)
+        await waitFor(randomRange(1, 2));
 
         // Переходим на следующий стейт
         nextState = GameStates.waitingForVisitor;
@@ -274,18 +270,11 @@ export class GameScreen extends Container implements AppScreen {
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
         // +++ Загорается лампочка на правом мониторе.
+        // +++ Возможно что-то происходит с экраном.+++
+        // Кнопка становится доступна для клика. +++
         this.bigTV.triggerAlarm();
-        // Возможно что-то происходит с экраном.
 
-        // Кнопка становится доступна для клика.
-        // FIXME: тестово делаем по ней "клик". Нужно будет выпилить и реализовать через кнопку!!!
-        setTimeout(() => {
-          this.bigTV.onCameraButtonPressed();
-          console.log('Кнопка на камере нажата!');
-        }, 500);
-        // Ждём пока пользователь не кликнет по кнопке камеры.
         await this.bigTV.waitForCameraButtonPress();
 
         // Переходим на следующий стейт
@@ -296,21 +285,20 @@ export class GameScreen extends Container implements AppScreen {
       case GameStates.visitorOnCamera:
         // ОТОБРАЖАЕМ ПОСЕТИТЕЛЯ НА КАМЕРЕ.
 
-        // TODO: РЕАЛИЗОВАТЬ
-        // Запускается счётчик времени, пока посетитель будет находится на камере.
-        // Если пользователь ушёл, то выключаем отображение на телевизоре.
-
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
-        // Показываем посетителя на камере
+        // +++ Показываем посетителя на камере
+        // +++ Генерим рандомный скин
         this.bigTV.showVisitorOnCamera();
-        // Возможно отбираем в этот момент управление? (ЭКСПЕРИМЕНТАЛЬНО)
-        // По идее, в этот-же момент должна включиться анимация вылезания папки.
+        // ---Возможно отбираем в этот момент управление? (ЭКСПЕРИМЕНТАЛЬНО)
+
+        // +++++По идее, в этот-же момент должна включиться анимация вылезания папки.
+        // ++++В зависимости от количества оставшихся папок, запускается анимация вылезания.
+        await this.drawing.newDrawingPadUpAnimation();
+
+        // TODO: РЕАЛИЗОВАТЬ
         // Уменьшаем каунтер папок.
-        // В зависимости от количества оставшихся папок, запускается анимация вылезания.
-        await waitFor(5); // FIXME: Эмуляция этих вот всех процессов.
 
         // Как только папка вылезла на столе и открылась, переходим на следующий стейт
         nextState = GameStates.readyToDraw;
@@ -322,11 +310,16 @@ export class GameScreen extends Container implements AppScreen {
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: РЕАЛИЗОВАТЬ
+        // +++ Запускается счётчик времени, пока посетитель будет находится на камере.
+        // +++ Если пользователь ушёл, то выключаем отображение на телевизоре.
+        this.bigTV.startVisitorStayTimer();
+
+        // FIXME: РЕАЛИЗОВАТЬ
         // Папка становится доступна для взаимодействия.
         // Если камера игрока при этом находится внизу, на папке, то лочим её.
         // Чтобы пользователь мог спокойно работать с рисованием.
         // Если пользователь уводит мышку в стороны (далеко от папки), то возвращаем управление камерой
+        this.drawing.readyToDraw();
 
         // FIXME: тестово делаем взаимодействие с рисованием.
         setTimeout(() => {
@@ -567,8 +560,18 @@ export class GameScreen extends Container implements AppScreen {
   private startDay(): void {
     // TODO: проверить, всё ли тут ок и что тут происходит. Например явно таймер spawnDelayMs нужно запускать в визитёре.
     // А вот запускать дневной таймер как будто бы вполне можно и тут.
+
+    // TODO: проверить что это всё устанавливается!!
+    // Календарь показывает текущий день. ++
+    // Время показывает 00 ++
+    // КВОТА (под часами) показывает необходимую норму для этого дня. ++
+    // Экраны ничего не показывают (надпись НО СИГНАЛ) (????) +++
+    // Из контейнера для папки видна папка с бумагой (если она есть) (ЛОЛ ПРО ЭТО ЗАБЫЛИ!) Вместо этого папки просто не будет +++
+
     this.balance.startDay();
-    this.dayTimer.startDay(this.balance.getDayDurationSec(), this.balance.day);
+    this.dayTimer.startDay(this.balance.getDayDurationSec(), this.balance.day, this.balance.getDailyQuota());
+    this.bigTV.resetForNewDay();
+    this.drawing.resetForNewDay();
     this.spawnDelayMs = this.balance.getVisitorSpawnDelaySec();
   }
 

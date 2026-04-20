@@ -1,4 +1,5 @@
-import { type PatternId, type SkinId } from './types';
+import { randomRange } from '@/engine/utils/random';
+import type { PartIds } from '@/shared/serverTypes';
 
 // Минимальное время, которое должно пройти с начала рисования, чтобы его можно было считать полноценным.
 // Если пользователь нарисовал фоторобот быстрее, то имеет смысл добавить к задержке перед следующим посетителем
@@ -31,9 +32,9 @@ export class Balance {
     return 120; // 2 минуты
   }
 
-  public getVisitorStayMs(): number {
+  public getVisitorStaySec(): number {
     // TODO: уменьшать с ростом day (через сколько времени посетитель уйдёт с камеры)
-    return 10_000;
+    return randomRange(60, 120); // от 60 до 120 секунд
   }
 
   public getMinimumDrawSec(): number {
@@ -66,16 +67,36 @@ export class Balance {
   }
 
   /** Доступные на этом дне скины для каждого паттерна */
-  public getAvailableSkins(): Record<PatternId, SkinId[]> {
-    // TODO: на первых днях — ограниченный набор, потом расширяется.
-    // Вероятно эти данные можно держать в виде констант где-то вне баланса, чтобы не засорять его.
-    const eyes = [1, 3, 5];
-    const nose = [2, 4];
-    const mouth = [1, 5, 4, 2];
-    const face = [2, 4, 5];
-    const clothes = [2, 4, 5];
+  public getVisitorSkin(): PartIds {
+    const rand = (max: number) => Math.floor(Math.random() * max) + 1;
 
-    return { eyes, nose, mouth, face, clothes };
+    const skin: PartIds = {
+      head: rand(5),
+      body: rand(6),
+      nose: rand(9),
+      ear: rand(9),
+      mouth: rand(7),
+      brow: rand(9),
+      eye: rand(6),
+    };
+
+    const optionalParts: Array<[keyof PartIds, number]> = [
+      ['hat', 4],
+      ['accessories', 6],
+      ['hair', 9],
+      ['beard', 5],
+      ['scar', 6],
+    ];
+
+    const count = Math.floor(Math.random() * 5) + 1;
+    const shuffled = optionalParts.sort(() => Math.random() - 0.5);
+
+    for (let i = 0; i < count; i++) {
+      const [key, max] = shuffled[i];
+      skin[key] = rand(max);
+    }
+
+    return skin;
   }
 
   public getStartingPaperCount(): number {

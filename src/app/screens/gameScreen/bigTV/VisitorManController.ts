@@ -4,6 +4,7 @@ import { SpineObjectController } from '@/app/objects/SpineObjectController';
 import type { ValuesOf } from '@/app/utils/typesHelper';
 import { Skin, type TrackEntry } from '@esotericsoftware/spine-pixi-v8';
 import { Sprite, Texture } from 'pixi.js';
+import type { VisitorData } from '../types';
 
 /**
  * Перечисление анимаций персонажа visitor
@@ -15,7 +16,7 @@ export const VisitorManAnimation = {
   OUT: 'out',
   SUSPECT: 'suspect',
 } as const;
-type VisitorManAnimation = ValuesOf<typeof VisitorManAnimation>;
+export type VisitorManAnimation = ValuesOf<typeof VisitorManAnimation>;
 
 const SPINE_SETTINGS = {
   skeleton: 'mans.json',
@@ -50,7 +51,7 @@ export class VisitorManController extends SpineObjectController {
     this.isShowing = false;
   }
 
-  public showCharacter(suspect: boolean): void {
+  public showCharacter(suspect: boolean, visitorData: VisitorData): void {
     this.isShowing = true;
 
     this.visitorBackground.texture = Texture.from(suspect ? 'BG_suspect' : Math.random() > 0.5 ? 'BG_1' : 'BG_2');
@@ -59,18 +60,24 @@ export class VisitorManController extends SpineObjectController {
 
     const combinedSkin = new Skin('combined-skin');
 
-    // 2. Добавляем в него нужные скины из данных скелета по именам
     const skeletonData = this.spine.skeleton.data;
+    const { skins } = visitorData;
 
-    const skinNames = [
-      'head/head_1',
-      'body/body_1',
-      'nose/nose_1',
-      'ears/ears_1',
-      'mouth/mouth_1',
-      'brow/brow_1',
-      'eyes/eye_1',
+    const skinNames: string[] = [
+      `head/head_${skins.head}`,
+      `body/body_${skins.body}`,
+      `nose/nose_${skins.nose}`,
+      `ears/ears_${skins.ear}`,
+      `mouth/mouth_${skins.mouth}`,
+      `brow/brow_${skins.brow}`,
+      `eyes/eye_${skins.eye}`,
     ];
+
+    if (skins.hat !== undefined) skinNames.push(`hat/hat_${skins.hat}`);
+    if (skins.accessories !== undefined) skinNames.push(`accessories/accessories_${skins.accessories}`);
+    if (skins.hair !== undefined) skinNames.push(`hair/hair_${skins.hair}`);
+    if (skins.beard !== undefined) skinNames.push(`beard/beard_${skins.beard}`);
+    if (skins.scar !== undefined) skinNames.push(`scars/scars_${skins.scar}`);
 
     for (const skinName of skinNames) {
       const skin = skeletonData.findSkin(skinName);
@@ -87,7 +94,7 @@ export class VisitorManController extends SpineObjectController {
     if (suspect) {
       this.play(VisitorManAnimation.SUSPECT, true, 0);
     } else {
-      this.play(VisitorManAnimation.LONG_1, true, 0);
+      this.play(visitorData.idleAnimation, true, 0);
     }
   }
 

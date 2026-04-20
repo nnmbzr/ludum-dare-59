@@ -76,7 +76,7 @@ export class DayTimer extends Container {
     this.scoreNumber.text = String(score);
   }
 
-  public startDay(durationSec: number, dayNumber: number): void {
+  public startDay(durationSec: number, dayNumber: number, quota: number): void {
     this.totalSec = durationSec;
     this.remainingSec = durationSec;
     this.blinking = false;
@@ -84,6 +84,7 @@ export class DayTimer extends Container {
     this.timerSpine.setTime(0);
     this.timerSpine.playOn();
     this.dayNumber.text = String(dayNumber);
+    this.setScore(quota);
     // TODO: сбросить визуальное состояние мигания
   }
 

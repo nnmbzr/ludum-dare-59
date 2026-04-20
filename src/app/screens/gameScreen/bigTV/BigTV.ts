@@ -2,7 +2,7 @@ import { Container } from 'pixi.js';
 import { type Balance } from '../Balance';
 import { type VisitorData } from '../types';
 import { TVController, TvSlots } from './TVController';
-import { VisitorManController } from './VisitorManController';
+import { VisitorManAnimation, VisitorManController } from './VisitorManController';
 
 /**
  * Всё, что относится к правому монитору:
@@ -34,7 +34,7 @@ export class BigTV extends Container {
     this.gameBalance = balance;
 
     this.visitorSpine = new VisitorManController();
-    this.tvSpine = new TVController();
+    this.tvSpine = new TVController(() => this.onCameraButtonPressed());
     // TODO:
     // - создать Spine-объект с пустым набором скинов
     // - создать лампочку (Sprite с gsap-мигалкой)
@@ -43,13 +43,20 @@ export class BigTV extends Container {
     // - скрыть всё кроме кнопки/лампочки
   }
 
+  public resetForNewDay(): void {
+    this.tvSpine.turnOffCamera();
+    this.stayTimerSec = 0;
+    this.currentVisitor = null;
+  }
+
   /**
    * Сгенерировать посетителя и включить лампочку.
    * Посетитель НЕ виден, пока игрок не нажмёт кнопку камеры.
    */
   public triggerAlarm(): void {
-    this.currentVisitor = this.generateVisitor();
+    this.currentVisitor = this.generateRandomVisitor();
     this.tvSpine.playAlarm();
+    this.tvSpine.buttonOn();
     // TODO: включить мигание лампочки
   }
 
@@ -76,19 +83,25 @@ export class BigTV extends Container {
   /** Игрок нажал кнопку камеры — анимация показа посетителя */
   public async showVisitorOnCamera(): Promise<void> {
     if (!this.currentVisitor) return;
-    this.stayTimerSec = this.currentVisitor.staySec;
 
     // TODO:
     // - применить skins к спайну
     // - проиграть idle-анимацию
     this.tvSpine.addVisitorToSlot(TvSlots.PORTRAITS, this.visitorSpine);
-    this.visitorSpine.showCharacter(false);
+    this.visitorSpine.showCharacter(false, this.currentVisitor);
     // - выключить лампочку
     this.tvSpine.stopAlarm();
     // - показать экран камеры (убрать заглушку "выключено")
   }
 
+  public startVisitorStayTimer(): void {
+    if (!this.currentVisitor) return;
+
+    this.stayTimerSec = this.currentVisitor.staySec;
+  }
+
   public turnOffCamera(): void {
+    this.stayTimerSec = 0;
     this.visitorSpine.hideCharacterInstance();
     this.tvSpine.removeVisitorFromSlot(this.visitorSpine);
   }
@@ -107,10 +120,10 @@ export class BigTV extends Container {
   }
 
   private async showNoSignal(): Promise<void> {
-    // TODO: показать помехи + надпись "НЕТ СИГНАЛА", gsap-анимация + выключить спайн
     this.currentVisitor = null;
 
     await this.visitorSpine.playHideCharacterAnimation();
+    this.tvSpine.playSygnalLost();
     this.tvSpine.removeVisitorFromSlot(this.visitorSpine);
   }
 
@@ -122,25 +135,19 @@ export class BigTV extends Container {
     return this.tvSpine;
   }
 
-  private generateVisitor(): VisitorData {
-    // TODO:
-    // - взять balance.getAvailableSkins()
-    // - для каждого patternId выбрать случайный skinId
-    // - собрать SkinSet
-    // - вернуть VisitorData
+  private generateRandomVisitor(): VisitorData {
+    const skin = this.gameBalance.getVisitorSkin();
+
+    const animations = [VisitorManAnimation.LONG_1, VisitorManAnimation.LONG_2, VisitorManAnimation.LONG_3];
+
+    const animation = animations[Math.floor(Math.random() * animations.length)];
+    const staySec = this.gameBalance.getVisitorStaySec();
+
     console.warn('Visitor generation not implemented, returning fallback visitor !!!');
     return {
-      staySec: 60,
-      skins: {
-        head: 1,
-        body: 1,
-        nose: 1,
-        ear: 1,
-        eye: 1,
-        mouth: 1,
-        brow: 1,
-      },
-      idleAnimation: 'idle_1',
+      staySec: staySec,
+      skins: skin,
+      idleAnimation: animation,
       id: 'visitor_fallback',
     };
   }
