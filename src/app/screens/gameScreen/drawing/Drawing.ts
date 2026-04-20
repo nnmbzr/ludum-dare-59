@@ -1,8 +1,6 @@
 export const CANVAS_W = 500;
 export const CANVAS_H = 720;
 export const BOARD_BG = 0xe8dcc8;
-export const ERASER_LIVE_FILL = 0xd4c9b8;
-export const ERASER_LIVE_FILL_ALPHA = 0.72;
 
 import { engine } from '@/app/getEngine';
 import type { PartIds } from '@/shared/serverTypes';
@@ -71,7 +69,7 @@ export class Drawing {
       resolution: 1,
     }) as HTMLCanvasElement;
 
-    return encodeInkLayer(srcCanvas, BOARD_BG);
+    return encodeInkLayer(srcCanvas, this.board.getInkEncodeBackground());
   }
 
   public activate(): void {
@@ -80,6 +78,7 @@ export class Drawing {
 
   public reset(): void {
     this.board.reset();
+    this.toolsUI.syncWithBoard('brush', 1);
   }
 
   public async pause(): Promise<void> {
@@ -92,6 +91,7 @@ export class Drawing {
 
   public beginNewSheet(skins: PartIds): void {
     this.board.beginNewSheet(skins);
+    this.toolsUI.syncWithBoard('brush', 1);
   }
 
   public getHolstCenterVirtual(): { x: number; y: number } {

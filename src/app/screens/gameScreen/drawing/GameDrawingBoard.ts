@@ -12,7 +12,7 @@ import {
   Texture,
   type Ticker,
 } from 'pixi.js';
-import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
+import { BOARD_BG, CANVAS_H, CANVAS_W } from './Drawing';
 
 const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
@@ -30,7 +30,9 @@ const DRAWING_TEX = {
   head: (i: number) => `head_template_${i}`,
 } as const;
 
-const HEAD_TEMPLATE_COUNT = 5;
+/** Шаблоны 1–5 — текстуры, №6 — пустой лист (без картинки). */
+const HEAD_TEMPLATE_COUNT = 6;
+const EMPTY_HEAD_TEMPLATE_INDEX = 5;
 
 const STROKE_LIVE_POINT_CAP = 340;
 const STROKE_LIVE_KEEP = 40;
@@ -42,7 +44,7 @@ const TEMPLATE_NAV_BTN_H = 52;
 const TEMPLATE_TOP_PAD = 44;
 const TEMPLATE_SIDE_PAD = 8;
 
-export type DrawTool = 'brush' | 'eraser';
+export type DrawTool = 'cursor' | 'brush' | 'eraser';
 
 export class GameDrawingBoard extends Container {
   private paused = false;
@@ -82,6 +84,11 @@ export class GameDrawingBoard extends Container {
   private lastHover = { x: CANVAS_W * 0.5, y: CANVAS_H * 0.5 };
 
   private headTemplateIndex = 0;
+
+  /** Цвет «бумаги» для заливки ластика и кодирования — после первого кадра берётся с текстуры листа. */
+  private inkEraseColor = BOARD_BG;
+  private inkEraseColorSampled = false;
+  private inkEraseSampleAttempts = 0;
 
   private readonly onDomCanvasPointerMove = (ev: PointerEvent) => {
     const app = engine();
@@ -124,6 +131,7 @@ export class GameDrawingBoard extends Container {
 
   private readonly onBoardDown = (e: FederatedPointerEvent) => {
     if (this.isTemplateNavTarget(e.target as Container)) return;
+    if (this.drawTool === 'cursor') return;
     const p = this.localOnBoard(e);
     this.beginStroke(p);
   };
@@ -190,6 +198,7 @@ export class GameDrawingBoard extends Container {
 
     this.layoutHeadTemplate();
     this.refreshTemplateIndexLabel();
+    this.updateTemplateNavVisibility();
 
     this.addChild(this.board);
   }
@@ -249,6 +258,14 @@ export class GameDrawingBoard extends Container {
     this.board.addChild(this.templateIndexLabel);
   }
 
+  /** Стрелки и номер шаблона — только в режиме выбора шаблона (курсор). */
+  private updateTemplateNavVisibility(): void {
+    const show = this.drawTool === 'cursor';
+    this.templateLeftBtn.visible = show;
+    this.templateRightBtn.visible = show;
+    this.templateIndexLabel.visible = show;
+  }
+
   private isTemplateNavTarget(target: Container | null | undefined): boolean {
     let o: Container | null = target ?? null;
     while (o) {
@@ -262,12 +279,22 @@ export class GameDrawingBoard extends Container {
     if (this.isDrawing) return;
     const n = HEAD_TEMPLATE_COUNT;
     this.headTemplateIndex = (this.headTemplateIndex + delta + n * 16) % n;
-    this.templateSprite.texture = Texture.from(DRAWING_TEX.head(this.headTemplateIndex + 1));
+    this.applyHeadTemplateTexture();
     this.layoutHeadTemplate();
     this.refreshTemplateIndexLabel();
   }
 
+  private applyHeadTemplateTexture(): void {
+    if (this.headTemplateIndex === EMPTY_HEAD_TEMPLATE_INDEX) {
+      this.templateSprite.visible = false;
+      return;
+    }
+    this.templateSprite.visible = true;
+    this.templateSprite.texture = Texture.from(DRAWING_TEX.head(this.headTemplateIndex + 1));
+  }
+
   private layoutHeadTemplate() {
+    if (!this.templateSprite.visible) return;
     const tw = this.templateSprite.texture.width;
     const th = this.templateSprite.texture.height;
     if (tw <= 0 || th <= 0) return;
@@ -287,6 +314,8 @@ export class GameDrawingBoard extends Container {
     if (this.isDrawing) return;
     if (this.drawTool === t) return;
     this.drawTool = t;
+    this.board.cursor = t === 'cursor' ? 'default' : 'none';
+    this.updateTemplateNavVisibility();
     if (this.pointerOverBoard && !this.isDrawing) this.refreshHoverDot();
   }
 
@@ -336,6 +365,7 @@ export class GameDrawingBoard extends Container {
     this.board.off('pointerdown', this.onBoardDown);
     this.board.on('pointerdown', this.onBoardDown);
     this.attachCanvasHolstPointer();
+    this.updateTemplateNavVisibility();
   }
 
   public getDrawingContainer(): Container {
@@ -350,7 +380,36 @@ export class GameDrawingBoard extends Container {
 
   public tick(_time: Ticker): void {
     if (this.paused) return;
+    if (!this.inkEraseColorSampled && this.inkEraseSampleAttempts < 24) {
+      this.inkEraseSampleAttempts++;
+      this.trySampleInkEraseColorFromPaper();
+    }
     if (this.isDrawing) this.redrawActiveBrush();
+  }
+
+  /** Цвет фона для ластика и `encodeInkLayer` (синхронизирован с пикселем бумаги). */
+  public getInkEncodeBackground(): number {
+    return this.inkEraseColor;
+  }
+
+  private trySampleInkEraseColorFromPaper(): void {
+    if (this.inkEraseColorSampled) return;
+    try {
+      const renderer = engine().renderer;
+      const canvas = renderer.extract.canvas({
+        target: this.bg,
+        frame: new Rectangle(Math.floor(CANVAS_W * 0.5), Math.floor(CANVAS_H * 0.5), 1, 1),
+        resolution: 1,
+      }) as HTMLCanvasElement;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      if (d[3] < 4) return;
+      this.inkEraseColor = (d[0]! << 16) | (d[1]! << 8) | d[2]!;
+      this.inkEraseColorSampled = true;
+    } catch {
+      /* оставляем BOARD_BG */
+    }
   }
 
   public layoutBottomCenter(screenW: number, screenH: number): void {
@@ -382,12 +441,14 @@ export class GameDrawingBoard extends Container {
     this.hideHoverDot();
     this.pointerOverBoard = false;
     this.drawTool = 'brush';
+    this.board.cursor = 'none';
     this.thicknessIx = 1;
     this.eraserNextBakeIndex = 0;
     this.headTemplateIndex = 0;
-    this.templateSprite.texture = Texture.from(DRAWING_TEX.head(1));
+    this.applyHeadTemplateTexture();
     this.layoutHeadTemplate();
     this.refreshTemplateIndexLabel();
+    this.updateTemplateNavVisibility();
   }
 
   public async pause() {
@@ -499,7 +560,9 @@ export class GameDrawingBoard extends Container {
       this.strokeBakeAccum = new Graphics();
       this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, this.strokeBakeAccum);
     }
-    const ink = this.liveStrokeIsEraser ? { color: BOARD_BG, alpha: 1 } : { color: 0x000000, alpha: 1 };
+    const ink = this.liveStrokeIsEraser
+      ? { color: this.inkEraseColor, alpha: 1 }
+      : { color: 0x000000, alpha: 1 };
     if (!this.liveStrokeIsEraser) {
       for (let i = 0; i < nMove; i++) {
         const p = this.strokePoints[i]!;
@@ -520,7 +583,7 @@ export class GameDrawingBoard extends Container {
     const from = this.eraserNextBakeIndex;
     const uptoExcl = n - 1;
     if (from >= uptoExcl) return;
-    const ink = { color: BOARD_BG, alpha: 1 };
+    const ink = { color: this.inkEraseColor, alpha: 1 };
     for (let i = from; i < uptoExcl; i++) {
       const p = this.strokePoints[i]!;
       const r = this.brushRadiusAt(p.tSec);
@@ -539,7 +602,7 @@ export class GameDrawingBoard extends Container {
       const r = this.liveStrokeR1;
       this.activeStroke
         .circle(p.x, p.y, r)
-        .fill({ color: ERASER_LIVE_FILL, alpha: ERASER_LIVE_FILL_ALPHA })
+        .fill({ color: this.inkEraseColor, alpha: 1 })
         .stroke({ width: 2, color: ERASER_LIVE_STROKE, alpha: 0.92 });
       return;
     }
@@ -562,7 +625,7 @@ export class GameDrawingBoard extends Container {
       if (!this.strokeBakeAccum) {
         this.addStrokeChunkBeforeActive(this.inkStrokesLayer, this.activeStroke, g);
       }
-      const ink = { color: BOARD_BG, alpha: 1 };
+      const ink = { color: this.inkEraseColor, alpha: 1 };
       for (let i = this.eraserNextBakeIndex; i < n; i++) {
         const p = this.strokePoints[i]!;
         let r = this.brushRadiusAt(p.tSec);
@@ -597,10 +660,14 @@ export class GameDrawingBoard extends Container {
     const c = this.clampToBoard({ x, y });
     const pr = THICKNESS_PRESETS[this.thicknessIx]!;
     this.hoverDot.clear();
+    if (this.drawTool === 'cursor') {
+      this.hoverDot.visible = false;
+      return;
+    }
     if (this.drawTool === 'eraser') {
       this.hoverDot
         .circle(c.x, c.y, pr.r1)
-        .fill({ color: ERASER_LIVE_FILL, alpha: ERASER_LIVE_FILL_ALPHA })
+        .fill({ color: this.inkEraseColor, alpha: 1 })
         .stroke({ width: 2, color: ERASER_LIVE_STROKE, alpha: 0.9 });
     } else {
       this.hoverDot
