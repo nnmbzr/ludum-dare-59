@@ -6,6 +6,7 @@ import * as PIXI from 'pixi.js';
 import { setEngine } from './app/getEngine';
 import { GameScreen } from './app/screens/gameScreen/GameScreen';
 import { LoadScreen } from './app/screens/LoadScreen';
+import { MainMenuScreen } from './app/screens/mainMenuScreen/MainMenuScreen';
 import { userSettings } from './app/utils/userSettings';
 import { DEBUG_START_SCREEN, getAppScreenByName } from './dev';
 import { CreationEngine } from './engine/engine';
@@ -61,6 +62,10 @@ export const MAX_DT = 0.032; // 30 fps cap
 
   initDevtools({ stage: engine.stage, renderer: engine.renderer });
 
+  const authenticated = engine.server.checkAuth();
+
+  console.log('User is', authenticated ? 'authenticated' : 'not authenticated');
+
   // Show the load screen first and then start game
   await engine.navigation.showScreen(LoadScreen);
 
@@ -72,8 +77,9 @@ export const MAX_DT = 0.032; // 30 fps cap
 
   if (DEBUG_START_SCREEN) {
     await engine.navigation.showScreen(getAppScreenByName(DEBUG_START_SCREEN));
-  } else {
+  } else if (authenticated) {
     await engine.navigation.showScreen(GameScreen);
+  } else {
+    await engine.navigation.showScreen(MainMenuScreen);
   }
-
 })();

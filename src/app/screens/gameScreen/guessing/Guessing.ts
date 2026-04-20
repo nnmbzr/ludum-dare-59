@@ -1,6 +1,7 @@
+import type { PartIds } from '@/shared/serverTypes';
 import { Container, Sprite, Texture } from 'pixi.js';
 import { type Balance } from '../Balance';
-import { type GuessTarget, type SkinSet } from '../types';
+import { type GuessTarget } from '../types';
 import { FaxController } from './FaxController';
 
 /**
@@ -90,7 +91,7 @@ export class Guessing extends Container {
     // TODO: подсветить мониторы
   }
 
-  private generateOptions(_correct: SkinSet): Array<{ skins: SkinSet; isCorrect: boolean }> {
+  private generateOptions(_correct: PartIds): Array<{ skins: PartIds; isCorrect: boolean }> {
     // TODO:
     // 1. Взять correct как первый вариант
     // 2. Два других — скопировать correct и "сбить":

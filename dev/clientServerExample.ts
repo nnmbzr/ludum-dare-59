@@ -1,4 +1,4 @@
-// api.ts на клиенте
+/* // api.ts на клиенте
 import type {
   GetRandomPortraitResponse,
   GuessResponse,
@@ -63,3 +63,4 @@ export async function submitGuess(portraitId: string, correct: boolean) {
   if (!res.ok) throw new Error('guess failed');
   return res.json() as Promise<GuessResponse>;
 }
+ */

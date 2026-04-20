@@ -4,6 +4,7 @@ import { DEBUG_GAME_STATE } from '@/dev';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import { waitFor } from '@/engine/utils/waitFor';
 import { MAX_DT } from '@/main';
+import type { PartIds } from '@/shared/serverTypes';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background, BACKGROUND_SLOTS } from './Background';
@@ -15,7 +16,7 @@ import { decodeInkLayer } from './drawing/drawingEncoder';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
-import { GameStates, type GameState, type GuessTarget, type SkinSet } from './types';
+import { GameStates, type GameState, type GuessTarget } from './types';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -577,7 +578,7 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   // FIXME: надо подумать куда деть эту логику получения данных. Может быть получать её из промиса в стейтмашине?
-  private async handlePhotofitSubmitted(data: string, skins: SkinSet): Promise<void> {
+  private async handlePhotofitSubmitted(data: string, skins: PartIds): Promise<void> {
     // Получаем фоторобот в виде base64
     const base64 = data; // заглушка
 
@@ -645,19 +646,41 @@ export class GameScreen extends Container implements AppScreen {
 
     console.log('Получены данные с рисовалки:', base64String, sizeInKB);
 
-    const canvas = await decodeInkLayer(base64String);
+    const dataToSubmit = {
+      imageBase64: base64String,
+      partIds: {
+        head: 1,
+        body: 1,
+        nose: 1,
+        ear: 1,
+        eye: 1,
+        mouth: 1,
+        brow: 1,
+      },
+    };
+
+    engine()
+      .server.submitPortrait(dataToSubmit)
+      .then((response) => {
+        console.log('Ответ от сервера на отправку фоторобота:', response);
+      });
+  }
+
+  private async getRandomResult(): Promise<void> {
+    const randomPhoto = await engine().server.getRandomPortrait();
+
+    if (!randomPhoto) {
+      console.warn('Не удалось получить случайный фоторобот');
+      return;
+    }
+
+    const canvas = await decodeInkLayer(randomPhoto.imageBase64);
 
     const data: GuessTarget = {
-      portraitId: 'local-test',
-      authorNickname: 'NNMBZR',
+      portraitId: randomPhoto.portraitId,
+      authorNickname: randomPhoto.authorName,
       canvasData: canvas, // готовая картинка, не пересобираем
-      originalSkins: {
-        eyes: 1,
-        nose: 1,
-        mouth: 1,
-        face: 1,
-        clothes: 1,
-      }, // правильный ответ
+      originalSkins: randomPhoto.partIds, // правильный ответ
     };
 
     this.guessing.presentTarget(data);
@@ -672,6 +695,12 @@ export class GameScreen extends Container implements AppScreen {
       e.preventDefault();
 
       this.showDrawingResult();
+    }
+
+    if (e.code === 'KeyR') {
+      e.preventDefault();
+
+      this.getRandomResult();
     }
   }
 
