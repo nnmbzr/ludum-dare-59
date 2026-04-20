@@ -7,13 +7,14 @@ export const FaxAnimation = {
   IDLE_EMPTY: 'idle_empty',
   IDLE_PAPER: 'idle_paper',
   NUMBERS: 'numbers',
-  RECEIVE: 'recieve',
+  RECEIVE: 'receive',
   SEND: 'send',
 } as const;
 type FaxAnimation = ValuesOf<typeof FaxAnimation>;
 
 export const FaxSlots = {
   BUTTON: 'Container_Button',
+  PAPER: 'Container_Paper',
 } as const;
 type FaxSlots = ValuesOf<typeof FaxSlots>;
 
@@ -26,7 +27,7 @@ export class FaxController extends SpineObjectController {
   constructor() {
     super(SPINE_SETTINGS);
 
-    this.state.data.defaultMix = 0.2;
+    // this.state.data.defaultMix = 0.2;
     this.play(FaxAnimation.IDLE_EMPTY, true, 0);
   }
 
@@ -34,7 +35,8 @@ export class FaxController extends SpineObjectController {
     this.play(FaxAnimation.NUMBERS, true, 0);
   }
 
-  public async acceptsServerResponse(): Promise<void> {
+  public async acceptsServerResponse(content: Container): Promise<void> {
+    this.addToSlot(FaxSlots.PAPER, content);
     await this.play(FaxAnimation.RECEIVE, false, 0);
     this.play(FaxAnimation.IDLE_PAPER, true, 0);
   }

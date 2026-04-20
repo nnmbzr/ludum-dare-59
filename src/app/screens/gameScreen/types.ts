@@ -21,7 +21,7 @@ export interface VisitorData {
 /** То, что прилетело с сервера для угадывания */
 export interface GuessTarget {
   authorNickname: string;
-  photofitImageBase64: string; // готовая картинка, не пересобираем
+  canvasData: HTMLCanvasElement; // готовая картинка, не пересобираем
   originalSkins: SkinSet; // правильный ответ
 }
 

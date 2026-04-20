@@ -1,4 +1,4 @@
-import { Container } from 'pixi.js';
+import { Container, Sprite, Texture } from 'pixi.js';
 import { type Balance } from '../Balance';
 import { type GuessTarget, type SkinSet } from '../types';
 import { FaxController } from './FaxController';
@@ -61,6 +61,24 @@ export class Guessing extends Container {
    */
   public async presentTarget(target: GuessTarget): Promise<void> {
     this.currentTarget = target;
+
+    const container = new Container();
+
+    /* const backImage = Sprite.from('Paper');
+    backImage.anchor.set(0.5);
+    backImage.scale.set(0.47);
+    container.addChild(backImage); */
+
+    const texture = Texture.from(this.currentTarget.canvasData);
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5);
+    sprite.scale.set(2);
+    sprite.blendMode = 'multiply';
+
+    container.addChild(sprite);
+
+    this.faxSpine.acceptsServerResponse(container);
+
     // TODO: загрузить base64 в текстуру и положить на faxSheet
     // TODO: анимация выезда листа из факса
 
@@ -80,7 +98,8 @@ export class Guessing extends Container {
     //    (чем больше spread, тем больше расхождения → легче угадывать)
     // 3. Перемешать массив
     // 4. Вернуть три варианта с флагом, какой правильный
-    throw new Error('Not implemented');
+    console.warn('Not implemented');
+    return [];
   }
 
   private handleMonitorClick(index: number): void {

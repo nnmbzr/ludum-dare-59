@@ -4,11 +4,13 @@ export const BOARD_BG = 0xe8dcc8;
 export const ERASER_LIVE_FILL = 0xd4c9b8;
 export const ERASER_LIVE_FILL_ALPHA = 0.72;
 
-import type { Ticker } from 'pixi.js';
+import { engine } from '@/app/getEngine';
+import { Rectangle, type Ticker } from 'pixi.js';
 import type { SkinSet } from '../types';
 import { DrawingPadController } from './DrawingPadController';
 import { GameDrawingBoard } from './GameDrawingBoard';
 import { StampController } from './StampController';
+import { encodeInkLayer } from './drawingEncoder';
 
 export class Drawing {
   private drawingPadSpine: DrawingPadController;
@@ -52,9 +54,15 @@ export class Drawing {
   // --- Делегирование публичного API GameDrawingBoard ---
 
   public async getDrawingData(): Promise<string> {
-    const rawData = await this.board.generateDrawingData();
+    const container = this.board.getDrawingContainer();
 
-    return rawData;
+    const srcCanvas = engine().renderer.extract.canvas({
+      target: container,
+      frame: new Rectangle(0, 0, CANVAS_W, CANVAS_H),
+      resolution: 1,
+    }) as HTMLCanvasElement;
+
+    return encodeInkLayer(srcCanvas, BOARD_BG);
   }
 
   public activate(): void {
