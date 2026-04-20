@@ -37,7 +37,7 @@ export class DayTimer extends Container {
     const shouldBlink = this.remainingSec / this.totalSec < 0.15;
     if (shouldBlink && !this.blinking) {
       this.blinking = true;
-      // TODO: запустить gsap-анимацию мигания
+      this.timerSpine.playAlert();
     }
 
     // TODO: обновить стрелки/цифры часов

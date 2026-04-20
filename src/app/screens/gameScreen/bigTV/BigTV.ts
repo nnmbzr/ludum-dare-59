@@ -82,7 +82,7 @@ export class BigTV extends Container {
     // - применить skins к спайну
     // - проиграть idle-анимацию
     this.tvSpine.addVisitorToSlot(TvSlots.PORTRAITS, this.visitorSpine);
-    this.visitorSpine.showCharacter();
+    this.visitorSpine.showCharacter(false);
     // - выключить лампочку
     this.tvSpine.stopAlarm();
     // - показать экран камеры (убрать заглушку "выключено")

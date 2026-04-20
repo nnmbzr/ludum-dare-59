@@ -64,7 +64,7 @@ export const MAX_DT = 0.032; // 30 fps cap
 
   const authenticated = engine.server.checkAuth();
 
-  console.log('User is', authenticated ? 'authenticated' : 'not authenticated');
+  console.log('User is', authenticated ? 'authenticated' : 'not authenticated', engine.server.getCreds());
 
   // Show the load screen first and then start game
   await engine.navigation.showScreen(LoadScreen);
