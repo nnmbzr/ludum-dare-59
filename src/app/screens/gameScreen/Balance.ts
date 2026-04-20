@@ -13,7 +13,7 @@ const FIRST_VISITOR_SPAWN_DELAY_SEC = 3;
 export class Balance {
   public day = 1;
   public paperCount = 0;
-  public dayTimeRemainingMs = 0;
+  public dayTimeRemainingSec = 0;
 
   private currentDrawingTimeMs = 0;
   private firstVisitorSpawned = false;
@@ -26,9 +26,9 @@ export class Balance {
     return 3;
   }
 
-  public getDayDurationMs(): number {
+  public getDayDurationSec(): number {
     // TODO: сколько длится
-    return 120_000; // 2 минуты
+    return 120; // 2 минуты
   }
 
   public getVisitorStayMs(): number {
@@ -89,7 +89,7 @@ export class Balance {
   }
 
   public startDay(): void {
-    this.dayTimeRemainingMs = this.getDayDurationMs();
+    this.dayTimeRemainingSec = this.getDayDurationSec();
     this.firstVisitorSpawned = false;
     this.paperCount = this.getStartingPaperCount();
   }
@@ -99,7 +99,7 @@ export class Balance {
   }
 
   public isDayOver(): boolean {
-    return this.dayTimeRemainingMs <= 0;
+    return this.dayTimeRemainingSec <= 0;
   }
 
   public isQuotaMet(): boolean {
@@ -108,7 +108,7 @@ export class Balance {
 
   public reset(): void {
     this.day = 1;
-    this.dayTimeRemainingMs = 0;
+    this.dayTimeRemainingSec = 0;
     this.firstVisitorSpawned = false;
     this.currentDailyQuota = 0;
   }

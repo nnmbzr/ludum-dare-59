@@ -1,5 +1,5 @@
 import { PlaygroundScreen } from './app/screens/_dev/playground/PlaygroundScreen';
-import { DrawingScreen } from './app/screens/drawing/DrawingScreen';
+import { DrawingScreen } from './app/screens/drawingScreen/DrawingScreen';
 import type { GameState } from './app/screens/gameScreen/types';
 import type { AppScreenConstructor } from './engine/navigation/navigation';
 

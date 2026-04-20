@@ -4,11 +4,6 @@ import { Spine } from '@esotericsoftware/spine-pixi-v8';
 import gsap from 'gsap';
 import { Container } from 'pixi.js';
 import { FisheyeFilter } from './FisheyeFilter';
-import { GameDrawingBoard } from './GameDrawingBoard';
-
-const DRAWING_PAD_BOARD_OFFSET_X = -228;
-const DRAWING_PAD_BOARD_OFFSET_Y = -302;
-const DRAWING_PAD_BOARD_SLOT_SCALE = 0.86;
 
 const HOLST_CAMERA_INNER_DIST = 560;
 const HOLST_CAMERA_OUTER_DIST = 1600;
@@ -47,6 +42,8 @@ type BACKGROUND_SLOTS = ValuesOf<typeof BACKGROUND_SLOTS>;
 export class Background extends Container {
   private spine: Spine;
   private fisheyeFilter: FisheyeFilter;
+  private spriteSizeW = 0;
+  private spriteSizeH = 0;
 
   constructor() {
     super();
@@ -71,19 +68,6 @@ export class Background extends Container {
     this.addChild(this.spine);
   }
 
-  public mountDrawingBoard(layer: Container): void {
-    this.spine.removeSlotObject(layer);
-    if (layer.parent) layer.removeFromParent();
-    this.spine.addSlotObject(BACKGROUND_SLOTS.DRAWING_PAD, layer);
-    if (layer instanceof GameDrawingBoard) {
-      layer.setSpineSlotBoardNudge(
-        DRAWING_PAD_BOARD_OFFSET_X,
-        DRAWING_PAD_BOARD_OFFSET_Y,
-        DRAWING_PAD_BOARD_SLOT_SCALE,
-      );
-    }
-  }
-
   public addObjectToSlot(slotName: BACKGROUND_SLOTS, object: Container): void {
     this.spine.addSlotObject(slotName, object);
   }
@@ -100,7 +84,10 @@ export class Background extends Container {
     this.spine.pivot.set(lb.x + lb.width * 0.5, lb.y + lb.height * 0.5);
     this.spine.position.set(SCREEN_WIDTH * 0.5, SCREEN_HEIGHT * 0.5);
     const cover = Math.max(SCREEN_WIDTH / lb.width, SCREEN_HEIGHT / lb.height);
-    this.spine.scale.set(cover * PARALLAX_OVERSCAN);
+    const scale = cover * PARALLAX_OVERSCAN;
+    this.spine.scale.set(scale);
+    this.spriteSizeW = Math.max(1e-3, lb.width * scale);
+    this.spriteSizeH = Math.max(1e-3, lb.height * scale);
   }
 
   public updateFrame(deltaMs: number): void {
@@ -112,9 +99,8 @@ export class Background extends Container {
     const nx = (x - SCREEN_WIDTH / 2) / (SCREEN_WIDTH / 2);
     const ny = (y - SCREEN_HEIGHT / 2) / (SCREEN_HEIGHT / 2);
 
-    const lb = this.spine.getLocalBounds();
-    const spriteW = Math.max(1e-3, lb.width * Math.abs(this.spine.scale.x));
-    const spriteH = Math.max(1e-3, lb.height * Math.abs(this.spine.scale.y));
+    const spriteW = this.spriteSizeW;
+    const spriteH = this.spriteSizeH;
     const maxOffsetX = Math.max(0, spriteW * 0.5 - SCREEN_WIDTH / 2);
     const maxOffsetY = Math.max(0, spriteH * 0.5 - SCREEN_HEIGHT / 2);
 

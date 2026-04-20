@@ -8,13 +8,13 @@ import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background, BACKGROUND_SLOTS } from './Background';
 import { Balance } from './Balance';
-import { DayTimer } from './DayTimer';
-import { GameDrawingBoard } from './GameDrawingBoard';
-import { Guessing } from './Guessing';
+import { BigTV } from './bigTV/BigTV';
+import { DayTimer } from './dayTimer/DayTimer';
+import { Drawing } from './drawing/Drawing';
+import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
 import { GameStates, type GameState, type GuessTarget, type SkinSet } from './types';
-import { BigMonitor } from './visitors/BigMonitor';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -33,8 +33,8 @@ export class GameScreen extends Container implements AppScreen {
   // === Systems / visuals ===
   private balance: Balance;
   private server: Server;
-  private bigMonitor: BigMonitor;
-  private drawing: GameDrawingBoard;
+  private bigTV: BigTV;
+  private drawing: Drawing;
   private guessing: Guessing;
   private dayTimer: DayTimer;
   private hintPanel: HintPanel;
@@ -58,24 +58,30 @@ export class GameScreen extends Container implements AppScreen {
     // Игровые объекты
     this.background = new Background();
 
-    this.bigMonitor = new BigMonitor(this.balance);
-    this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigMonitor.getTVSpine());
+    this.bigTV = new BigTV(this.balance);
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigTV.getTVSpine());
 
-    this.drawing = new GameDrawingBoard();
+    this.drawing = new Drawing();
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
+
     this.guessing = new Guessing(this.balance);
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.FAX, this.guessing.getFaxSpine());
+
     this.dayTimer = new DayTimer();
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.CLOCK, this.dayTimer.getTimerSpine());
+
     this.hintPanel = new HintPanel();
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
-    this.mainContainer.addChild(this.background, this.bigMonitor, this.guessing, this.dayTimer, this.hintPanel);
-    this.background.mountDrawingBoard(this.drawing);
+    this.mainContainer.addChild(this.background, this.bigTV, this.guessing, this.dayTimer, this.hintPanel);
 
     this.wireCallbacks();
   }
 
   /** Проводки между системами.. */
   private wireCallbacks(): void {
-    this.bigMonitor.onVisitorLeft = () => this.handleVisitorLeft();
+    this.bigTV.onVisitorLeft = () => this.handleVisitorLeft();
 
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
@@ -117,15 +123,17 @@ export class GameScreen extends Container implements AppScreen {
     const dt = Math.min(time.deltaMS * 0.001, MAX_DT);
 
     // Таймер дня
-    this.dayTimer.update(deltaMs);
-    this.balance.dayTimeRemainingMs = this.dayTimer.getRemainingMs();
+    this.dayTimer.update(dt);
+    this.balance.dayTimeRemainingSec = this.dayTimer.getRemainingSec();
 
     // Видимые системы
     this.background.updateFrame(deltaMs);
-    this.drawing.tick(time);
 
     // FIXME: Syncronyze all dt!
-    this.bigMonitor.update(dt);
+    this.bigTV.update(dt);
+    this.guessing.update(dt);
+    this.drawing.update(dt);
+    this.dayTimer.update(dt);
 
     // Логика стейта
     this.tickState(deltaMs);
@@ -138,9 +146,10 @@ export class GameScreen extends Container implements AppScreen {
     }
 
     // Конец дня
-    if (this.balance.isDayOver() && this.state !== GameStates.dayEnded) {
+    // FIXME: нужно корректно настроить эту логику. Сейчас будет блочить игру.
+    /* if (this.balance.isDayOver() && this.state !== GameStates.dayEnded) {
       this.endDay();
-    }
+    } */
   }
 
   /** Resize the screen, fired whenever window size changes */
@@ -184,7 +193,7 @@ export class GameScreen extends Container implements AppScreen {
     if (this.spawnDelayMs > 0) {
       this.spawnDelayMs -= deltaMs;
       if (this.spawnDelayMs <= 0) {
-        this.bigMonitor.triggerAlarm();
+        this.bigTV.triggerAlarm();
         // FIXME: сейчас мы считаем прямо тут, внутри. Вместо этого нужно перенести логику старта и расчёта задержки в visitor
         // this.setState(GameStates.alarmOn);
       }
@@ -261,17 +270,17 @@ export class GameScreen extends Container implements AppScreen {
 
         // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
         // +++ Загорается лампочка на правом мониторе.
-        this.bigMonitor.triggerAlarm();
+        this.bigTV.triggerAlarm();
         // Возможно что-то происходит с экраном.
 
         // Кнопка становится доступна для клика.
         // FIXME: тестово делаем по ней "клик". Нужно будет выпилить и реализовать через кнопку!!!
         setTimeout(() => {
-          this.bigMonitor.onCameraButtonPressed();
+          this.bigTV.onCameraButtonPressed();
           console.log('Кнопка на камере нажата!');
         }, 2000);
         // Ждём пока пользователь не кликнет по кнопке камеры.
-        await this.bigMonitor.waitForCameraButtonPress();
+        await this.bigTV.waitForCameraButtonPress();
 
         // Переходим на следующий стейт
         nextState = GameStates.visitorOnCamera;
@@ -290,7 +299,7 @@ export class GameScreen extends Container implements AppScreen {
 
         // TODO: РЕАЛИЗОВАТЬ (по аналогии с startDay, чтобы не раздувать стейтмашину)
         // Показываем посетителя на камере
-        this.bigMonitor.showVisitorOnCamera();
+        this.bigTV.showVisitorOnCamera();
         // Возможно отбираем в этот момент управление? (ЭКСПЕРИМЕНТАЛЬНО)
         // По идее, в этот-же момент должна включиться анимация вылезания папки.
         // Уменьшаем каунтер папок.
@@ -343,7 +352,7 @@ export class GameScreen extends Container implements AppScreen {
         // После этого запускается анимация закрытия и ухода папки.
         // Увеличивается счётчик обслуженных посетителей.
         // ++++ Камера гаснет (если посетитель уже на камере, то потом просто скрываем его).
-        this.bigMonitor.turnOffCamera();
+        this.bigTV.turnOffCamera();
         // Сейчас просто эмулируем все эти анимации
         await waitFor(3);
 
@@ -552,7 +561,7 @@ export class GameScreen extends Container implements AppScreen {
     // TODO: проверить, всё ли тут ок и что тут происходит. Например явно таймер spawnDelayMs нужно запускать в визитёре.
     // А вот запускать дневной таймер как будто бы вполне можно и тут.
     this.balance.startDay();
-    this.dayTimer.startDay(this.balance.getDayDurationMs(), this.balance.day);
+    this.dayTimer.startDay(this.balance.getDayDurationSec(), this.balance.day);
     this.spawnDelayMs = this.balance.getVisitorSpawnDelaySec();
   }
 
