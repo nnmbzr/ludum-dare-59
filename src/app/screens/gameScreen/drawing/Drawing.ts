@@ -9,6 +9,7 @@ import type { PartIds } from '@/shared/serverTypes';
 import { Rectangle, type Ticker } from 'pixi.js';
 import { DrawingPadController } from './DrawingPadController';
 import { type DrawTool, GameDrawingBoard } from './GameDrawingBoard';
+import { DrawingToolsUI } from './DrawingToolsUI';
 import { StampController } from './StampController';
 import { encodeInkLayer } from './drawingEncoder';
 
@@ -16,6 +17,7 @@ export class Drawing {
   private drawingPadSpine: DrawingPadController;
   private stampSpine: StampController;
   private board: GameDrawingBoard;
+  private toolsUI: DrawingToolsUI;
 
   // Ожидание первого взаимодействие с рисованием
   private cameraButtonPressPromise: Promise<void> | null = null;
@@ -29,12 +31,19 @@ export class Drawing {
     this.drawingPadSpine = new DrawingPadController();
     this.stampSpine = new StampController();
     this.board = new GameDrawingBoard();
+    this.toolsUI = new DrawingToolsUI();
 
     this.drawingPadSpine.mountBoard(this.board);
+    this.drawingPadSpine.mountToolsUI(this.toolsUI);
     this.drawingPadSpine.newFolderUp();
 
     // Позиционирование доски внутри планшета.
     this.setBoardNudge(-210, -345);
+
+    // Wire up UI callbacks
+    this.toolsUI.setOnToolChange((tool) => this.board.setDrawTool(tool));
+    this.toolsUI.setOnSizeChange((size) => this.board.setThicknessIx(size));
+    this.toolsUI.setOnUndo(() => this.board.undoLastStrokeFromUi());
   }
 
   public update(dt: number): void {

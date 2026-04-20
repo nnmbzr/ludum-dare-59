@@ -52,5 +52,9 @@ export class DrawingPadController extends SpineObjectController {
     this.spine.addSlotObject(DRAWING_SLOT, board);
   }
 
+  public mountToolsUI(toolsUI: Container): void {
+    this.spine.addSlotObject('Container_Tools', toolsUI);
+  }
+
   protected override onAnimationComplete(_animName: DrawingPadAnimation, _entry: TrackEntry): void {}
 }
