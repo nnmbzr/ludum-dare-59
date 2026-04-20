@@ -27,11 +27,11 @@ export class Drawing {
 
   constructor() {
     this.drawingPadSpine = new DrawingPadController();
+
     this.stampSpine = new StampController();
     this.board = new GameDrawingBoard();
 
     this.drawingPadSpine.mountBoard(this.board);
-    this.drawingPadSpine.newFolderUp();
 
     // Позиционирование доски внутри планшета.
     this.setBoardNudge(-210, -345);
@@ -63,6 +63,21 @@ export class Drawing {
     }) as HTMLCanvasElement;
 
     return encodeInkLayer(srcCanvas, BOARD_BG);
+  }
+
+  public resetForNewDay() {
+    this.drawingPadSpine.resetForNewDay();
+    // FIXME: ОТКЛЮЧИТЬ РАБОТУ ПЛАНШЕТА! ОН СТАНОВИТСЯ НЕ АКТИВНЫМ!
+  }
+
+  public async newDrawingPadUpAnimation(): Promise<void> {
+    await this.drawingPadSpine.newFolderUp();
+  }
+
+  public async readyToDraw() {
+    console.log('Drawing is ready to be drawn on');
+    // FIXME: ВКЛЮЧАЕМ ВОЗМОЖНОСТЬ РИСОВАТЬ!
+    // ПРИВЯЗЫВАЕМ КАМЕРУ К ПЛАНШЕТУ!!!!
   }
 
   public activate(): void {

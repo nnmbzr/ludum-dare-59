@@ -24,20 +24,32 @@ export class DrawingPadController extends SpineObjectController {
     super(SPINE_SETTINGS);
 
     this.state.data.defaultMix = 0.2;
-    this.state.setEmptyAnimation(0);
+    const state = this.state.setAnimation(0, DrawingPadAnimation.CLOSE, false);
+
+    const duration = state.animation?.duration ?? 1;
+    state.trackTime = duration;
+
     this.spine.scale.set(1);
+    this.spine.update(0);
 
     this.isShowing = true;
   }
 
+  public resetForNewDay(): void {
+    this.state.setEmptyAnimation(0);
+    this.visible = false;
+    this.isShowing = false;
+  }
+
   public async close(): Promise<void> {
     await this.play(DrawingPadAnimation.CLOSE, false, 0);
-    this.state.setEmptyAnimation(0);
+    // this.state.setEmptyAnimation(0);
     this.isShowing = false;
   }
 
   public async newFolderUp(): Promise<void> {
     this.isShowing = true;
+    this.visible = true;
     await this.play(DrawingPadAnimation.NEW_FOLDER_UP, false, 0);
     return this.play(DrawingPadAnimation.OPEN, false, 0);
   }

@@ -1,9 +1,10 @@
 // src/app/screens/game/controllers/DudeController.ts
 
 import { SpineObjectController } from '@/app/objects/SpineObjectController';
+import { SpriteButton } from '@/app/ui/SpriteButton';
 import type { ValuesOf } from '@/app/utils/typesHelper';
 import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
-import type { Container } from 'pixi.js';
+import { Sprite, type Container } from 'pixi.js';
 
 /**
  * Перечисление анимаций персонажа TV
@@ -30,25 +31,37 @@ const SPINE_SETTINGS = {
 };
 
 export class TVController extends SpineObjectController {
-  private isShowing = false;
-
   /**
    * Создает контроллер для персонажа TV
    */
-  constructor() {
+
+  private button: SpriteButton;
+
+  constructor(onCameraButtonPressed: () => void) {
     super(SPINE_SETTINGS);
 
     this.state.data.defaultMix = 0.2;
-
-    // Устанавливаем начальную анимацию
     this.state.setAnimation(0, TvAnimation.GLITCHES, true);
     this.spine.scale.set(1);
 
-    this.isShowing = false;
+    this.button = new SpriteButton(
+      Sprite.from('TV_big_button_off'),
+      Sprite.from('TV_big_button_on'),
+      onCameraButtonPressed,
+    );
+    this.button.enabled = false;
+    this.spine.addSlotObject(TvSlots.BUTTON, this.button);
+  }
+
+  public buttonOn(): void {
+    this.button.buttonOn();
+  }
+
+  public turnOffCamera(): void {
+    this.state.setAnimation(0, TvAnimation.GLITCHES, true);
   }
 
   public playAlarm(): void {
-    this.isShowing = true;
     this.play(TvAnimation.ALARM_ON, true, 0);
   }
 
@@ -64,9 +77,11 @@ export class TVController extends SpineObjectController {
     this.spine.removeSlotObject(visitor);
   }
 
-  public override update(_dt: number): void {
-    if (!this.isShowing) return;
+  public playSygnalLost(): void {
+    this.state.setAnimation(0, TvAnimation.SIGNAL_LOST, false);
+  }
 
+  public override update(_dt: number): void {
     super.update(_dt);
   }
 
