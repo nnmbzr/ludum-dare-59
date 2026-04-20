@@ -1,6 +1,6 @@
 {
 "skeleton": {
-	"hash": "JW2ImNay1zM",
+	"hash": "nO987JmBxx8",
 	"spine": "4.2.43",
 	"x": -295.08,
 	"y": -236.73,
@@ -24,7 +24,7 @@
 	{ "name": "3D_back", "parent": "head", "x": 29.44, "y": 92.5, "icon": "warning" },
 	{ "name": "3D", "parent": "head", "x": 90.4, "y": -35.82, "color": "abe323ff", "icon": "arrows" },
 	{ "name": "Hends", "parent": "body", "length": 57.78, "rotation": 1.77, "x": -125.01, "y": -4.26 },
-	{ "name": "backgroundContainer", "parent": "root" },
+	{ "name": "backgroundContainer", "parent": "root", "y": 33.77 },
 	{ "name": "ear_R", "parent": "head", "rotation": -7.69, "x": 68.1, "y": -90.93, "scaleY": -1 },
 	{ "name": "brow_L2", "parent": "head", "x": 154.71, "y": -68.51, "scaleY": -1 },
 	{
@@ -5199,11 +5199,11 @@
 			},
 			"light": {
 				"rgba": [
-					{ "time": 1.8, "color": "06ff0000" },
-					{ "time": 1.8667, "color": "00ff2fff" }
+					{ "time": 0.3333, "color": "06ff0000" },
+					{ "time": 0.4, "color": "00ff2fff" }
 				],
 				"attachment": [
-					{ "time": 1.8 }
+					{ "time": 0.3333 }
 				]
 			},
 			"rope": {

@@ -79,6 +79,7 @@ export class GameScreen extends Container implements AppScreen {
 
     this.hintPanel = new HintPanel();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.HINT, this.hintPanel.getHintContainer());
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.POINTS, this.hintPanel.getPointsContainer());
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
     this.mainContainer.addChild(this.background, this.bigTV, this.guessing, this.dayTimer, this.hintPanel);

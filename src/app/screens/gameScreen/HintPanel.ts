@@ -12,7 +12,7 @@ export class HintPanel extends Container {
   private pointsLabel: Text;
   private pointsValue: Text;
 
-  private hintContainer: Container;
+  private pointsContainer: Container;
 
   constructor() {
     super();
@@ -48,16 +48,20 @@ export class HintPanel extends Container {
     this.pointsValue.y = pointsY + (this.pointsLabel.height - this.pointsValue.height) / 2;
     this.pointsValue.x = 10;
 
-    this.hintContainer = new Container();
-    this.hintContainer.addChild(this.hintText, this.pointsLabel, this.pointsValue);
-    this.hintContainer.x = 0;
-    this.hintContainer.y = 0;
+    this.pointsContainer = new Container();
+    this.pointsContainer.addChild(this.pointsLabel, this.pointsValue);
+    this.pointsContainer.x = 0;
+    this.pointsContainer.y = 0;
 
     this.label = 'hint_panel';
   }
 
   public getHintContainer(): Container {
-    return this.hintContainer;
+    return this.hintText;
+  }
+
+  public getPointsContainer(): Container {
+    return this.pointsContainer;
   }
 
   public setHintForState(state: GameState): void {
