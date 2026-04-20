@@ -28,7 +28,7 @@ export class Drawing {
   constructor() {
     this.drawingPadSpine = new DrawingPadController();
 
-    this.stampSpine = new StampController();
+    this.stampSpine = new StampController(() => this.onStampButtonPressed());
     this.board = new GameDrawingBoard();
 
     this.drawingPadSpine.mountBoard(this.board);
@@ -74,10 +74,36 @@ export class Drawing {
     await this.drawingPadSpine.newFolderUp();
   }
 
+  public async closeDrawingPad(): Promise<void> {
+    await this.drawingPadSpine.close();
+  }
+
   public async readyToDraw() {
     console.log('Drawing is ready to be drawn on');
     // FIXME: ВКЛЮЧАЕМ ВОЗМОЖНОСТЬ РИСОВАТЬ!
     // ПРИВЯЗЫВАЕМ КАМЕРУ К ПЛАНШЕТУ!!!!
+  }
+
+  public deactivateDrawing(): void {
+    // FIXME: ОТКЛЮЧАЕМ ВОЗМОЖНОСТЬ РИСОВАТЬ!
+    // камера от планшета пока не отвязывается (если это возможно)
+  }
+
+  public disableCameraLock(): void {
+    // FIXME: ОТВЯЗЫВАЕМ КАМЕРУ ОТ ПЛАНШЕТА
+    // если сложно, то отключаем привязку в deactivateDrawing, а тут просто кидаем консоль лог.
+  }
+
+  public enableStamp(): void {
+    this.stampSpine.readyToApply();
+    this.stampSpine.buttonOn();
+  }
+
+  public async toPutStamp(): Promise<void> {
+    await this.stampSpine.stamp(() => {
+      // FIXME: РЕАЛИЗОВАТЬ
+      console.log('Добавить спрайт штампа на доску!!!');
+    });
   }
 
   public activate(): void {

@@ -120,14 +120,18 @@ export class BigTV extends Container {
   }
 
   private async showNoSignal(): Promise<void> {
-    this.currentVisitor = null;
+    // this.currentVisitor = null;
 
     await this.visitorSpine.playHideCharacterAnimation();
     this.tvSpine.playSygnalLost();
     this.tvSpine.removeVisitorFromSlot(this.visitorSpine);
   }
 
-  public getCurrentVisitor(): VisitorData | null {
+  public getCurrentVisitor(): VisitorData {
+    if (!this.currentVisitor) {
+      throw new Error('No current visitor in BigTV');
+    }
+
     return this.currentVisitor;
   }
 

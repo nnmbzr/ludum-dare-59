@@ -109,6 +109,14 @@ export class Balance {
     return correct ? 2 : 1; // TODO: формула от day. Или свитчём или ещё как-то
   }
 
+  public visitorServed(): void {
+    this.currentDailyQuota++;
+  }
+
+  public getCurrentPoints(): number {
+    return this.currentDailyQuota;
+  }
+
   public startDay(): void {
     this.dayTimeRemainingSec = this.getDayDurationSec();
     this.firstVisitorSpawned = false;
