@@ -51,6 +51,12 @@ export class Drawing {
 
   // --- Делегирование публичного API GameDrawingBoard ---
 
+  public async getDrawingData(): Promise<string> {
+    const rawData = await this.board.generateDrawingData();
+
+    return rawData;
+  }
+
   public activate(): void {
     this.board.activate();
   }

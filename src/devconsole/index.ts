@@ -228,7 +228,7 @@ function renderUI() {
     (btn as HTMLButtonElement).onclick = async (e) => {
       const url = (e.currentTarget as HTMLButtonElement).getAttribute('data-url')!;
       await removeReplacement(url);
-      window.location.reload();
+      // window.location.reload();
     };
   });
 
@@ -238,7 +238,7 @@ function renderUI() {
       const url = (e.target as HTMLInputElement).getAttribute('data-url')!;
       if (file) {
         await saveReplacement(url, file);
-        window.location.reload();
+        // window.location.reload();
       }
     };
   });

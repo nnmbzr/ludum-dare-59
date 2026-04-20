@@ -3,14 +3,15 @@ import { PausePopup } from '@/app/popups/PausePopup';
 import { DEBUG_GAME_STATE } from '@/dev';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import { waitFor } from '@/engine/utils/waitFor';
-import { MAX_DT } from '@/main';
+import { MAX_DT, SCREEN_HEIGHT, SCREEN_WIDTH } from '@/main';
 import gsap from 'gsap';
-import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
+import { Container, Sprite, Texture, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background, BACKGROUND_SLOTS } from './Background';
 import { Balance } from './Balance';
 import { BigTV } from './bigTV/BigTV';
 import { DayTimer } from './dayTimer/DayTimer';
 import { Drawing } from './drawing/Drawing';
+import { decodeInkLayer } from './drawing/drawingEncoder';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
@@ -25,6 +26,7 @@ export class GameScreen extends Container implements AppScreen {
   public static assetBundles = ['main'];
   private boundOnPointerMove = this.onPointerMove.bind(this);
   private boundOnPointerDown = this.onPointerDown.bind(this);
+  private boundOnKeyDown = this.onKeyDown.bind(this);
 
   // === Layers ===
   public mainContainer: Container;
@@ -63,6 +65,7 @@ export class GameScreen extends Container implements AppScreen {
 
     this.drawing = new Drawing();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
+
     this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
 
     this.guessing = new Guessing(this.balance);
@@ -631,9 +634,34 @@ export class GameScreen extends Container implements AppScreen {
     }
   }
 
+  private async showDrawingResult(): Promise<void> {
+    const base64String = await this.drawing.getDrawingData();
+
+    const padding = base64String.endsWith('==') ? 2 : base64String.endsWith('=') ? 1 : 0;
+    const sizeInKB = (base64String.length * 0.75 - padding) / 1024;
+
+    const canvas = await decodeInkLayer(base64String);
+    const texture = Texture.from(canvas);
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5);
+    sprite.scale.set(2);
+    sprite.position.set(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+    this.mainContainer.addChild(sprite);
+
+    console.log('Получены данные с рисовалки:', base64String, sizeInKB);
+  }
+
   // ==========================================================================
   // Input
   // ==========================================================================
+
+  private onKeyDown(e: KeyboardEvent): void {
+    if (e.code === 'KeyA') {
+      e.preventDefault();
+
+      this.showDrawingResult();
+    }
+  }
 
   private onPointerDown(_e: FederatedPointerEvent) {}
 
@@ -645,11 +673,13 @@ export class GameScreen extends Container implements AppScreen {
   private setupEventHandlers() {
     this.on('pointermove', this.boundOnPointerMove);
     this.on('pointerdown', this.boundOnPointerDown);
+    document.addEventListener('keydown', this.boundOnKeyDown);
     this.eventMode = 'static';
   }
 
   private cleanupEventHandlers() {
     this.off('pointermove', this.boundOnPointerMove);
     this.off('pointerdown', this.boundOnPointerDown);
+    document.removeEventListener('keydown', this.boundOnKeyDown);
   }
 }

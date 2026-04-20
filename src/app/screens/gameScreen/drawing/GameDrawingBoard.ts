@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, Graphics, Point, Rectangle, Text, type Ticker } from 'pixi.js';
 import type { SkinSet } from '../types';
 import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
+import { encodeInkLayer } from './drawingEncoder';
 const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
 
@@ -695,6 +696,16 @@ export class GameDrawingBoard extends Container {
     this.board.off('pointerdown', this.onBoardDown);
     this.board.on('pointerdown', this.onBoardDown);
     this.attachCanvasHolstPointer();
+  }
+
+  public async generateDrawingData(): Promise<string> {
+    const srcCanvas = engine().renderer.extract.canvas({
+      target: this.inkStrokesLayer,
+      frame: new Rectangle(0, 0, CANVAS_W, CANVAS_H),
+      resolution: 1,
+    }) as HTMLCanvasElement;
+
+    return encodeInkLayer(srcCanvas, BOARD_BG);
   }
 
   public beginNewSheet(_skins: SkinSet): void {
