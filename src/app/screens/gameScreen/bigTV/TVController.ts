@@ -11,6 +11,10 @@ import type { Container } from 'pixi.js';
 export const TvAnimation = {
   ALARM_ON: 'alarm_on',
   ALARM_OFF: 'alarm_off',
+  GLITCHES: 'glitches',
+  IDLE: 'idle',
+  SIGNAL_DETECTED: 'signal_detected',
+  SIGNAL_LOST: 'signal_lost',
 } as const;
 type TvAnimation = ValuesOf<typeof TvAnimation>;
 
@@ -37,7 +41,7 @@ export class TVController extends SpineObjectController {
     this.state.data.defaultMix = 0.2;
 
     // Устанавливаем начальную анимацию
-    this.state.setAnimation(0, TvAnimation.ALARM_OFF, false);
+    this.state.setAnimation(0, TvAnimation.GLITCHES, true);
     this.spine.scale.set(1);
 
     this.isShowing = false;
@@ -49,7 +53,7 @@ export class TVController extends SpineObjectController {
   }
 
   public stopAlarm() {
-    this.state.setAnimation(0, TvAnimation.ALARM_OFF, false);
+    this.state.setAnimation(0, TvAnimation.IDLE, false);
   }
 
   public addVisitorToSlot(slot: TvSlots, visitor: Container): void {

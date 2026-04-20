@@ -1,4 +1,5 @@
 import { engine } from '@/app/getEngine';
+import type { PartIds } from '@/shared/serverTypes';
 import gsap from 'gsap';
 import {
   Container,
@@ -11,7 +12,6 @@ import {
   Texture,
   type Ticker,
 } from 'pixi.js';
-import type { SkinSet } from '../types';
 import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
 
 const ERASER_LIVE_STROKE = 0x4a4a55;
@@ -47,7 +47,7 @@ export type DrawTool = 'brush' | 'eraser';
 export class GameDrawingBoard extends Container {
   private paused = false;
 
-  public onSubmitted: (data: string, skins: SkinSet) => void = () => {};
+  public onSubmitted: (data: string, skins: PartIds) => void = () => {};
 
   private board: Container;
   private bg: Sprite;
@@ -338,7 +338,11 @@ export class GameDrawingBoard extends Container {
     this.attachCanvasHolstPointer();
   }
 
-  public beginNewSheet(_skins: SkinSet): void {
+  public getDrawingContainer(): Container {
+    return this.inkStrokesLayer;
+  }
+
+  public beginNewSheet(_skins: PartIds): void {
     void _skins;
     this.reset();
     this.activate();

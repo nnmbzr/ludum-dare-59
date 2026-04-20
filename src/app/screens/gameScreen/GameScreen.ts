@@ -4,6 +4,7 @@ import { DEBUG_GAME_STATE } from '@/dev';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import { waitFor } from '@/engine/utils/waitFor';
 import { MAX_DT } from '@/main';
+import type { PartIds } from '@/shared/serverTypes';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background, BACKGROUND_SLOTS } from './Background';
@@ -11,10 +12,11 @@ import { Balance } from './Balance';
 import { BigTV } from './bigTV/BigTV';
 import { DayTimer } from './dayTimer/DayTimer';
 import { Drawing } from './drawing/Drawing';
+import { decodeInkLayer } from './drawing/drawingEncoder';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
-import { GameStates, type GameState, type GuessTarget, type SkinSet } from './types';
+import { GameStates, type GameState, type GuessTarget } from './types';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -25,6 +27,7 @@ export class GameScreen extends Container implements AppScreen {
   public static assetBundles = ['main'];
   private boundOnPointerMove = this.onPointerMove.bind(this);
   private boundOnPointerDown = this.onPointerDown.bind(this);
+  private boundOnKeyDown = this.onKeyDown.bind(this);
 
   // === Layers ===
   public mainContainer: Container;
@@ -63,6 +66,7 @@ export class GameScreen extends Container implements AppScreen {
 
     this.drawing = new Drawing();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
+
     this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
 
     this.guessing = new Guessing(this.balance);
@@ -70,8 +74,10 @@ export class GameScreen extends Container implements AppScreen {
 
     this.dayTimer = new DayTimer();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.CLOCK, this.dayTimer.getTimerSpine());
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.CALENDAR, this.dayTimer.getTextContainer());
 
     this.hintPanel = new HintPanel();
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.HINT, this.hintPanel.getHintContainer());
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
     this.mainContainer.addChild(this.background, this.bigTV, this.guessing, this.dayTimer, this.hintPanel);
@@ -86,7 +92,7 @@ export class GameScreen extends Container implements AppScreen {
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
     this.guessing.onFaxRequested = () => this.handleFaxRequested();
-    this.guessing.onGuessMade = (correct, author) => this.handleGuessMade(correct, author);
+    this.guessing.onGuessMade = (correct, portraitId) => this.handleGuessMade(correct, portraitId);
   }
 
   // ==========================================================================
@@ -243,7 +249,7 @@ export class GameScreen extends Container implements AppScreen {
         this.startDay();
 
         // Проходит немного времени (таймер 3-4 секунды)
-        await waitFor(3);
+        await waitFor(0.5);
 
         // Переходим на следующий стейт
         nextState = GameStates.waitingForVisitor;
@@ -278,7 +284,7 @@ export class GameScreen extends Container implements AppScreen {
         setTimeout(() => {
           this.bigTV.onCameraButtonPressed();
           console.log('Кнопка на камере нажата!');
-        }, 2000);
+        }, 500);
         // Ждём пока пользователь не кликнет по кнопке камеры.
         await this.bigTV.waitForCameraButtonPress();
 
@@ -428,6 +434,7 @@ export class GameScreen extends Container implements AppScreen {
         // Запускается анимация получения фоторобота.
         // После этого запускаются мониторы с подозреваемыми.
         // В них передаём информацию о целевом подозреваемом.
+        // Запускается анимация бэкграунда (загорается свет над мониторами)
         // FIXME: тестово эмулируем всё это время делеем.
         await waitFor(3);
 
@@ -574,7 +581,7 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   // FIXME: надо подумать куда деть эту логику получения данных. Может быть получать её из промиса в стейтмашине?
-  private async handlePhotofitSubmitted(data: string, skins: SkinSet): Promise<void> {
+  private async handlePhotofitSubmitted(data: string, skins: PartIds): Promise<void> {
     // Получаем фоторобот в виде base64
     const base64 = data; // заглушка
 
@@ -596,11 +603,11 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   // FIXME: аналогично
-  private handleGuessMade(correct: boolean, targetAuthor: string): void {
+  private handleGuessMade(correct: boolean, portraitId: string): void {
     // Награда за угадывание
     // TODO: наверное это нужно как-то явно показать!
     this.balance.paperCount += this.balance.getRewardForGuessing(correct);
-    void this.server.reportGuess(targetAuthor, correct);
+    void this.server.reportGuess(portraitId, correct);
 
     void this.guessing.dismiss().then(() => {
       // this.spawnDelayMs = this.balance.getVisitorSpawnDelaySec();
@@ -631,9 +638,96 @@ export class GameScreen extends Container implements AppScreen {
     }
   }
 
+  private async showDrawingResult(): Promise<void> {
+    const base64String = await this.drawing.getDrawingData();
+
+    // const base64String =
+    //   'eJx9V0tPXVUUzrf23uec+wJaLhe4BQoU6EMLtIratAUu0hJaQmlJOjCmTpw4cOCoo06aNOpEB2pjNBpjfMUY48SZQ/+Cf8Df4MiRrm+vfe659HGAyzn7rL2+9fzWvv9e9MD9sC0ABGjCweEt8MqAWcABHd6j82aOgCYwEjBFCc9P2xtXDp1I+c4hXWFI+CylZLr0OUcOj0KfDgSeaAF1vnc1XVGzhhHKHarfm5WyX7Whilvjrz4naZQyLa7n0bo93a24CVVxPfU4SobK7mBIRcTcFeqHSaPEFtvmyh1lXKmz1rfmBuhhiPGNq0XEHzbMKn5CCLtqtTyBfRS9euVH0HW339H/6kXAULkueVx9ng2U3o6ZdU9YoQUlmeb86TYUA6uemrxZMtJfL55jRdGAuyaMqjuCjZTLQl8M1l0eI+A1z2mNNbQVEdSK47aeTeYDyHVITTsBm9W6G/QQpXdufAAxrkHqsFjJVmY5HE27xpO2UGpycDmYH1kX01Hg6JX3PTHUrERljRYJ1W3mZUSin83JzORh0aQka4B2XE22F0+JZRlDQTve+WoMVEM99r7b6Peus2prQcZhDGDpgjQL8zVm1z8DUfnJl5lP9guCFbJfj9lMXdI0xJgXGcB0TUma6K3zGKjdI7jAWAYJCZXZqdPbjcB1KWuwhdCxqAQxTRbheoqVYdbCM9AcS4SxbyRvA9DUlbBuFtVTzFvR7jbtr/eZM9RiXWlsQyKbMm4JK4wZUtP2ZaiEK0Culh3V6FeZ0BNhSeW0hfGMv7XSiytA3nL9+s6jToyZxiEfK6ZJdtuw1VaMU4j+tok6lBhKDI3616mthf40MGy1zLQNq4z638dwwy52foO9MkrDRlLcVB/Xr1KrKLa3Tua60YVMYMSYaIPRPG7zoW4ZameQ01Gr3/QWLb5pivpEPdmShXwjTeDQKCM+mlhWFm3mbZivrDFpAAXj4+bpQ4/SZ1PXymhiEDdnPUKcAJwpOrmuTxt6j/13tqyMdqoQB9+Vyl4PnAVydr+P83ZMK1H5FPCGLePlbkUbTh45oJdFDZMxozGTzUwLzm1Tx+lKiU5EHurzfbrnZ4++CBaB/ESZPzi2jaJncNdYc2dKJjshxnmpHyrTbFsSzy8A+UmLojVh9MbviEb6VNovc9VpxJjGIbRTTou5fNFVdDi4m1lENISqx6ZBsJsyVusab5wr+jpuxegrUC2WZQylstiF0qsDYX9F/zI0Ix8Aa4z93ei1N4nEDD7+fVY+uDRUjOYD/OcQclKaTVmK/RepgOwQiPI1UHxNrIHzwDclXacrkWL2I/81ErP+VjHP7v7u4K9R/DALFH8gEXr4nb7rSRO/pCSRUuRnZEO6P/8uLh9TOwTuW4j2YkPgv4qOjGjJZl9SSGIXPtY3KtamxGPIcdHq/DTq0jNLF3CfaNdOA24V9/wxADN8/bEuz+rYFOD9mCg9KfPcLR+A03nh/6HwoWINKW8IxfSscIrj9hEN0zfuUXyzxCg/rIjFweyABxIZbRGQUHT4cKBysijkSy2bRuWUnu+Ze8A8P+uBsfdlPwHuhkSkBWmkk1gwGSkbjN11DZC2nNJvGumUBWBKUPRkDOwvtHHa2EK1XOKt8o7uWreifg2Qjqj06+SSNekQ/6ZjnSs/0N59g19RDiXuOSz4Va51CHEyHoAmgCVZkS6AuZS4o99UrBAXsArIpMyzCiLlLvjzluhZp/GdpG0OL7hu9ATKQyOAdHWfLItTyFo8p42I2HltTpYBmU2topaJ0wpE183Rnhdlka0GtEStnAarBSvgVPHVM+Aw4LoyK3DLcj76U+jOYZkCZBqQC4Cs9D3lf62/Kf2jBcsALnMy61c+sikuym0A09INL3PTHiJndUzJS/Z+Iqxx5ZbMMO/AJbkj026UtfEqYu1FzTqXL8shZtRugVwBcIddQqJ1ejY61Dh6zmzoyfDAcAsHt0l5YEYKiNuSQ0YlEKln705KIpJtQG5jzmbGdXebO5HfFGBfUflmD3D7FOG8USm/h/Ecchfwu5af6PQbFsIdzXINuOeB60KiMhp7m3dbaPK70jvsx55kdmp614jqSjSRVr5nxHYZfdq871Bf4zeqBzHYgleUSB+yxVokOXniJwAfDdCpswng0ywmk/60hF/n8c8k/gQe1fE9sPofxs5zBw==';
+
+    const padding = base64String.endsWith('==') ? 2 : base64String.endsWith('=') ? 1 : 0;
+    const sizeInKB = (base64String.length * 0.75 - padding) / 1024;
+
+    console.log('Получены данные с рисовалки:', base64String, sizeInKB);
+
+    const dataToSubmit = {
+      imageBase64: base64String,
+      partIds: {
+        head: 1,
+        body: 1,
+        nose: 1,
+        ear: 1,
+        eye: 1,
+        mouth: 1,
+        brow: 1,
+      },
+    };
+
+    engine()
+      .server.submitPortrait(dataToSubmit)
+      .then((response) => {
+        console.log('Ответ от сервера на отправку фоторобота:', response);
+      });
+  }
+
+  private async getRandomResult(): Promise<void> {
+    let randomPhoto = await engine().server.getRandomPortrait();
+
+    // FIXME: ТЕСТИРОВАНИЕ КОНТЕЙНЕРА С ЧЁРНЫМ ФОНОМ
+    randomPhoto = null;
+
+    if (!randomPhoto) {
+      console.warn('Не удалось получить случайный фоторобот');
+
+      // FIXME: нужно учеть вероятность того что фотки не будет. Что в этом случае???
+      const fallBackBase =
+        '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';
+
+      randomPhoto = {
+        portraitId: 'test-id',
+        authorName: 'test-author',
+        authorId: 'test-author-id',
+        imageBase64: fallBackBase,
+        partIds: {
+          head: 1,
+          body: 1,
+          nose: 1,
+          ear: 1,
+          eye: 1,
+          mouth: 1,
+          brow: 1,
+        },
+      };
+    }
+
+    const canvas = await decodeInkLayer(randomPhoto.imageBase64);
+
+    const data: GuessTarget = {
+      portraitId: randomPhoto.portraitId,
+      authorNickname: randomPhoto.authorName,
+      canvasData: canvas, // готовая картинка, не пересобираем
+      originalSkins: randomPhoto.partIds, // правильный ответ
+    };
+
+    this.guessing.presentTarget(data);
+  }
+
   // ==========================================================================
   // Input
   // ==========================================================================
+
+  private onKeyDown(e: KeyboardEvent): void {
+    if (e.code === 'KeyK') {
+      e.preventDefault();
+
+      this.showDrawingResult();
+    }
+
+    if (e.code === 'KeyL') {
+      e.preventDefault();
+
+      this.getRandomResult();
+    }
+  }
 
   private onPointerDown(_e: FederatedPointerEvent) {}
 
@@ -645,11 +739,13 @@ export class GameScreen extends Container implements AppScreen {
   private setupEventHandlers() {
     this.on('pointermove', this.boundOnPointerMove);
     this.on('pointerdown', this.boundOnPointerDown);
+    document.addEventListener('keydown', this.boundOnKeyDown);
     this.eventMode = 'static';
   }
 
   private cleanupEventHandlers() {
     this.off('pointermove', this.boundOnPointerMove);
     this.off('pointerdown', this.boundOnPointerDown);
+    document.removeEventListener('keydown', this.boundOnKeyDown);
   }
 }

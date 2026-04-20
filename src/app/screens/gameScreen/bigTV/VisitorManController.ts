@@ -2,7 +2,8 @@
 
 import { SpineObjectController } from '@/app/objects/SpineObjectController';
 import type { ValuesOf } from '@/app/utils/typesHelper';
-import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
+import { Skin, type TrackEntry } from '@esotericsoftware/spine-pixi-v8';
+import { Sprite, Texture } from 'pixi.js';
 
 /**
  * Перечисление анимаций персонажа visitor
@@ -21,8 +22,14 @@ const SPINE_SETTINGS = {
   atlas: 'character_man.atlas',
 };
 
+export const VisitorSlots = {
+  BACKGROUND: 'backgroundContainer',
+} as const;
+type VisitorSlots = ValuesOf<typeof VisitorSlots>;
+
 export class VisitorManController extends SpineObjectController {
   private isShowing = false;
+  private visitorBackground: Sprite;
 
   /**
    * Создает контроллер для персонажа visitor
@@ -32,6 +39,10 @@ export class VisitorManController extends SpineObjectController {
 
     this.state.data.defaultMix = 0.2;
 
+    // BG_1, BG_2, BG_suspect
+    this.visitorBackground = Sprite.from('BG_1');
+    this.visitorBackground.anchor.set(0.5);
+
     // Устанавливаем начальную анимацию
     this.state.setEmptyAnimation(0);
     this.spine.scale.set(1);
@@ -39,14 +50,45 @@ export class VisitorManController extends SpineObjectController {
     this.isShowing = false;
   }
 
-  public showCharacter(): void {
+  public showCharacter(suspect: boolean): void {
     this.isShowing = true;
 
-    // FIXME: нужно принимать скин, чтобы сконфигурировать персонажа.
-    this.spine.skeleton.setSkinByName('body/body_1');
+    this.visitorBackground.texture = Texture.from(suspect ? 'BG_suspect' : Math.random() > 0.5 ? 'BG_1' : 'BG_2');
+
+    this.spine.addSlotObject(VisitorSlots.BACKGROUND, this.visitorBackground);
+
+    const combinedSkin = new Skin('combined-skin');
+
+    // 2. Добавляем в него нужные скины из данных скелета по именам
+    const skeletonData = this.spine.skeleton.data;
+
+    const skinNames = [
+      'head/head_1',
+      'body/body_1',
+      'nose/nose_1',
+      'ears/ears_1',
+      'mouth/mouth_1',
+      'brow/brow_1',
+      'eyes/eye_1',
+    ];
+
+    for (const skinName of skinNames) {
+      const skin = skeletonData.findSkin(skinName);
+      if (skin) {
+        combinedSkin.addSkin(skin);
+      }
+    }
+
+    // 3. Устанавливаем комбинированный скин скелету
+    this.spine.skeleton.setSkin(combinedSkin);
+
     this.spine.skeleton.setSlotsToSetupPose();
 
-    this.play(VisitorManAnimation.LONG_1, true, 0);
+    if (suspect) {
+      this.play(VisitorManAnimation.SUSPECT, true, 0);
+    } else {
+      this.play(VisitorManAnimation.LONG_1, true, 0);
+    }
   }
 
   public async playHideCharacterAnimation(): Promise<void> {
@@ -54,8 +96,7 @@ export class VisitorManController extends SpineObjectController {
   }
 
   public hideCharacterInstance() {
-    this.isShowing = false;
-    this.state.setEmptyAnimation(0);
+    this.characterHide();
   }
 
   public override update(_dt: number): void {
@@ -64,14 +105,19 @@ export class VisitorManController extends SpineObjectController {
     super.update(_dt);
   }
 
+  private characterHide() {
+    this.isShowing = false;
+    this.state.setEmptyAnimation(0);
+    this.spine.skeleton.setSkin(null);
+  }
+
   /**
    * Обрабатывает завершение анимации персонажа
    */
   protected override onAnimationComplete(animName: VisitorManAnimation, _entry: TrackEntry): void {
     // После анимации прогона переходим к out_idle
     if (animName === VisitorManAnimation.OUT) {
-      this.state.setEmptyAnimation(0);
-      this.isShowing = false;
+      this.characterHide();
     }
   }
 

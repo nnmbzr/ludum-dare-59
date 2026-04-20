@@ -1,6 +1,7 @@
 import type { BGM, SFX } from './engine/audio/audio';
 import type { Navigation } from './engine/navigation/navigation';
 import type { CreationResizePluginOptions, DeepRequired } from './engine/resize/ResizePlugin';
+import type { ServerClient } from './engine/server/server';
 
 declare global {
   namespace PixiMixins {
@@ -13,6 +14,7 @@ declare global {
         toggleMuteAll: () => boolean;
       };
       navigation: Navigation;
+      server: ServerClient;
     }
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface ApplicationOptions extends CreationResizePluginOptions {}
