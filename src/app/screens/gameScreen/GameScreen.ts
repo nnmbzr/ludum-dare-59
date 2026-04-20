@@ -11,7 +11,6 @@ import { Balance } from './Balance';
 import { BigTV } from './bigTV/BigTV';
 import { DayTimer } from './dayTimer/DayTimer';
 import { Drawing } from './drawing/Drawing';
-import { GameDrawingBoard } from './drawing/GameDrawingBoard';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
@@ -35,7 +34,6 @@ export class GameScreen extends Container implements AppScreen {
   private balance: Balance;
   private server: Server;
   private bigTV: BigTV;
-  private drawingBoard: GameDrawingBoard;
   private drawing: Drawing;
   private guessing: Guessing;
   private dayTimer: DayTimer;
@@ -63,7 +61,6 @@ export class GameScreen extends Container implements AppScreen {
     this.bigTV = new BigTV(this.balance);
     this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigTV.getTVSpine());
 
-    this.drawingBoard = new GameDrawingBoard();
     this.drawing = new Drawing();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
     this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
@@ -78,7 +75,6 @@ export class GameScreen extends Container implements AppScreen {
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
     this.mainContainer.addChild(this.background, this.bigTV, this.guessing, this.dayTimer, this.hintPanel);
-    this.background.mountDrawingBoard(this.drawingBoard);
 
     this.wireCallbacks();
   }
@@ -87,7 +83,7 @@ export class GameScreen extends Container implements AppScreen {
   private wireCallbacks(): void {
     this.bigTV.onVisitorLeft = () => this.handleVisitorLeft();
 
-    this.drawingBoard.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
+    this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
     this.guessing.onFaxRequested = () => this.handleFaxRequested();
     this.guessing.onGuessMade = (correct, author) => this.handleGuessMade(correct, author);
@@ -101,7 +97,7 @@ export class GameScreen extends Container implements AppScreen {
   public prepare() {
     this.mainContainer.alpha = 0;
     this.setupEventHandlers();
-    this.drawingBoard.activate();
+    this.drawing.activate();
 
     // TODO: загрузить baked photofits из ассетов и передать в server.setBakedPhotofits(...)
 
@@ -132,7 +128,6 @@ export class GameScreen extends Container implements AppScreen {
 
     // Видимые системы
     this.background.updateFrame(deltaMs);
-    this.drawingBoard.tick(time);
 
     // FIXME: Syncronyze all dt!
     this.bigTV.update(dt);
@@ -329,10 +324,10 @@ export class GameScreen extends Container implements AppScreen {
 
         // FIXME: тестово делаем взаимодействие с рисованием.
         setTimeout(() => {
-          this.drawingBoard.onDrawingFirstInteraction();
+          this.drawing.onDrawingFirstInteraction();
         }, 2000);
         // Ждём пока пользователь начнёт взаимодействие с рисованием (или там, например, начнёт рисовать).
-        await this.drawingBoard.waitForUserFirstInteractWithDrawing();
+        await this.drawing.waitForUserFirstInteractWithDrawing();
 
         // переходим на следующий стейт
         nextState = GameStates.readyToAccept;
@@ -347,11 +342,11 @@ export class GameScreen extends Container implements AppScreen {
         // Разблокируется штамп.
         // FIXME: тестово эмулируем нажатие на штамп.
         setTimeout(() => {
-          this.drawingBoard.onStampButtonPressed();
+          this.drawing.onStampButtonPressed();
         }, testDrawingTimeToLev);
 
         // TODO: Ждём пока пользователь нажмёт на подтверждение
-        await this.drawingBoard.waitForStampButtonPress();
+        await this.drawing.waitForStampButtonPress();
 
         // TODO: РЕАЛИЗОВАТЬ
         // После этого запускается анимация закрытия и ухода папки.
@@ -644,7 +639,7 @@ export class GameScreen extends Container implements AppScreen {
 
   private onPointerMove(e: FederatedPointerEvent) {
     const { x, y } = engine().virtualScreen.toVirtualCoordinates(e.global.x, e.global.y);
-    this.background.updateMouse(x, y, this.drawingBoard.getHolstCenterVirtual());
+    this.background.updateMouse(x, y, this.drawing.getHolstCenterVirtual());
   }
 
   private setupEventHandlers() {

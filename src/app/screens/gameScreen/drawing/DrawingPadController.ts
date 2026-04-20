@@ -1,6 +1,9 @@
 import { SpineObjectController } from '@/app/objects/SpineObjectController';
 import type { ValuesOf } from '@/app/utils/typesHelper';
 import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
+import type { Container } from 'pixi.js';
+
+const DRAWING_SLOT = 'Container_Drawing';
 
 export const DrawingPadAnimation = {
   CLOSE: 'close',
@@ -43,6 +46,10 @@ export class DrawingPadController extends SpineObjectController {
     if (!this.isShowing) return;
 
     super.update(_dt);
+  }
+
+  public mountBoard(board: Container): void {
+    this.spine.addSlotObject(DRAWING_SLOT, board);
   }
 
   protected override onAnimationComplete(_animName: DrawingPadAnimation, _entry: TrackEntry): void {}

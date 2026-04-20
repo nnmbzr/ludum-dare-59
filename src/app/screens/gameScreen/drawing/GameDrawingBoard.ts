@@ -171,14 +171,6 @@ export class GameDrawingBoard extends Container {
     this.endStroke();
   };
 
-  // Ожидание первого взаимодействие с рисованием
-  private cameraButtonPressPromise: Promise<void> | null = null;
-  private resolveCameraButtonPress: (() => void) | null = null;
-
-  // Ожидание нажатия на кнопку штампа
-  private stampButtonPressPromise: Promise<void> | null = null;
-  private resolveStampButtonPress: (() => void) | null = null;
-
   constructor() {
     super();
 
@@ -726,47 +718,6 @@ export class GameDrawingBoard extends Container {
     this.position.set(0, 0);
     this.board.position.set((screenW - CANVAS_W) * 0.5, (screenH - CANVAS_H) * 0.5);
     this.board.scale.set(1, 1);
-  }
-
-  // Этот метод дожидается, пока игрок не провзаимодействует с рисованием.
-  // Вызывается из стейтмашины.
-  public waitForUserFirstInteractWithDrawing(): Promise<void> {
-    if (!this.cameraButtonPressPromise) {
-      this.cameraButtonPressPromise = new Promise<void>((resolve) => {
-        this.resolveCameraButtonPress = resolve;
-      });
-    }
-
-    return this.cameraButtonPressPromise;
-  }
-
-  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
-  public onDrawingFirstInteraction(): void {
-    if (!this.resolveCameraButtonPress) return;
-
-    this.resolveCameraButtonPress();
-    this.resolveCameraButtonPress = null;
-    this.cameraButtonPressPromise = null;
-  }
-
-  // Этот метод дожидается, пока игрок не нажмёт на кнопку подтверждения рисования.
-  // Вызывается из стейтмашины.
-  public waitForStampButtonPress(): Promise<void> {
-    if (!this.stampButtonPressPromise) {
-      this.stampButtonPressPromise = new Promise<void>((resolve) => {
-        this.resolveStampButtonPress = resolve;
-      });
-    }
-    return this.stampButtonPressPromise;
-  }
-
-  // FIXME: Временная заглушка для будущего вызова функции взаимодействия.
-  public onStampButtonPressed(): void {
-    if (!this.resolveStampButtonPress) return;
-
-    this.resolveStampButtonPress();
-    this.resolveStampButtonPress = null;
-    this.stampButtonPressPromise = null;
   }
 
   public reset() {

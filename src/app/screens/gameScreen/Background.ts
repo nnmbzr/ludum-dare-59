@@ -4,11 +4,6 @@ import { Spine } from '@esotericsoftware/spine-pixi-v8';
 import gsap from 'gsap';
 import { Container } from 'pixi.js';
 import { FisheyeFilter } from './FisheyeFilter';
-import { GameDrawingBoard } from './drawing/GameDrawingBoard';
-
-const DRAWING_PAD_BOARD_OFFSET_X = 45;
-const DRAWING_PAD_BOARD_OFFSET_Y = -342;
-const DRAWING_PAD_BOARD_SLOT_SCALE = 0.86;
 
 const HOLST_CAMERA_INNER_DIST = 560;
 const HOLST_CAMERA_OUTER_DIST = 1600;
@@ -39,7 +34,6 @@ export const BACKGROUND_SLOTS = {
   BIG_MONITOR: 'Container_TV_04',
   STAMP: 'Container_Stamp',
   DRAWING_PAD: 'Container_Drawing_Pad',
-  DRAWING_PAD_2: 'Container_Drawing_Pad2',
   HINT: 'Container_text_01',
   TARGET_QUOTA: 'Container_text_02',
 } as const;
@@ -72,19 +66,6 @@ export class Background extends Container {
     this.spine.state.setAnimation(0, 'animation', true);
 
     this.addChild(this.spine);
-  }
-
-  public mountDrawingBoard(layer: Container): void {
-    this.spine.removeSlotObject(layer);
-    if (layer.parent) layer.removeFromParent();
-    this.spine.addSlotObject(BACKGROUND_SLOTS.DRAWING_PAD_2, layer);
-    if (layer instanceof GameDrawingBoard) {
-      layer.setSpineSlotBoardNudge(
-        DRAWING_PAD_BOARD_OFFSET_X,
-        DRAWING_PAD_BOARD_OFFSET_Y,
-        DRAWING_PAD_BOARD_SLOT_SCALE,
-      );
-    }
   }
 
   public addObjectToSlot(slotName: BACKGROUND_SLOTS, object: Container): void {
