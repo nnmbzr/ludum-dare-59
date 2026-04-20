@@ -31,15 +31,35 @@ function pixelToGray(r: number, g: number, b: number, a: number, bgR: number, bg
   return composited < 128 ? INK_LEVEL + (composited / 128) * (128 - INK_LEVEL) : composited;
 }
 
+// Fax simulation parameters
+const FAX_NOISE = 2; // ±grayscale noise (scan sensor grain)
+const FAX_BLUR_X = 0.835; // horizontal smear weight (thermal print bleed)
+
 function floydSteinberg(data: Uint8ClampedArray, w: number, h: number, boardBg: number): Uint8Array {
   const bgR = (boardBg >> 16) & 0xff;
   const bgG = (boardBg >> 8) & 0xff;
   const bgB = boardBg & 0xff;
   const gray = new Float32Array(w * h);
+
+  // Step 1: pixel classification
   for (let i = 0; i < w * h; i++) {
     gray[i] = pixelToGray(data[i * 4], data[i * 4 + 1], data[i * 4 + 2], data[i * 4 + 3], bgR, bgG, bgB);
   }
 
+  // Step 2: horizontal blur — fax prints line-by-line, ink bleeds slightly sideways
+  for (let y = 0; y < h; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      gray[i] = gray[i] * (1 - FAX_BLUR_X) + (gray[i - 1] + gray[i + 1]) * (FAX_BLUR_X / 2);
+    }
+  }
+
+  // Step 3: scan noise — CCD sensor grain, unique per encode call
+  for (let i = 0; i < w * h; i++) {
+    gray[i] = Math.max(0, Math.min(255, gray[i] + (Math.random() * 2 - 1) * FAX_NOISE));
+  }
+
+  // Step 4: Floyd-Steinberg dithering
   const bits = new Uint8Array(Math.ceil((w * h) / 8));
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {

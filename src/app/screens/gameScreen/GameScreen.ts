@@ -635,18 +635,33 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   private async showDrawingResult(): Promise<void> {
-    const base64String = await this.drawing.getDrawingData();
+    // const base64String = await this.drawing.getDrawingData();
+
+    const base64String =
+      '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';
 
     const padding = base64String.endsWith('==') ? 2 : base64String.endsWith('=') ? 1 : 0;
     const sizeInKB = (base64String.length * 0.75 - padding) / 1024;
+
+    const container = new Container();
+
+    const backImage = Sprite.from('Paper');
+    backImage.anchor.set(0.5);
+    backImage.scale.set(0.47);
+    container.addChild(backImage);
 
     const canvas = await decodeInkLayer(base64String);
     const texture = Texture.from(canvas);
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5);
     sprite.scale.set(2);
-    sprite.position.set(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-    this.mainContainer.addChild(sprite);
+    sprite.blendMode = 'multiply';
+
+    container.addChild(sprite);
+
+    container.position.set(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+
+    this.mainContainer.addChild(container);
 
     console.log('Получены данные с рисовалки:', base64String, sizeInKB);
   }
