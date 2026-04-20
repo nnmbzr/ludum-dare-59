@@ -3,8 +3,21 @@
  * to get full type safety when calling the server.
  */
 
-/** Character part IDs. Shape is flexible — you can add new fields like "beard" later. */
-export type PartIds = Record<string, number>;
+/** Character part IDs. */
+export interface PartIds {
+  head: number;
+  body: number;
+  nose: number;
+  ear: number;
+  mouth: number;
+  brow: number;
+  eye: number;
+  hat?: number;
+  accessories?: number;
+  hair?: number;
+  beard?: number;
+  scar?: number;
+}
 
 // ===== POST /register =====
 
