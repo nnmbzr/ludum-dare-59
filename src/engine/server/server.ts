@@ -10,21 +10,25 @@ import type {
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
+const ITERATION = 1;
+
 /**
  * Low-level API client for server communication.
  * Lives in the engine and handles raw data and authentication.
  */
 export class ServerClient {
   private readonly timeoutMs = 3000;
+  private readonly playerIdKey = `playerId_${ITERATION}`;
+  private readonly tokenKey = `token_${ITERATION}`;
   public serverDisabled = false;
 
   public checkAuth(): boolean {
-    return !!(localStorage.getItem('playerId') && localStorage.getItem('token'));
+    return !!(localStorage.getItem(this.playerIdKey) && localStorage.getItem(this.tokenKey));
   }
 
   public getCreds() {
-    const playerId = localStorage.getItem('playerId');
-    const token = localStorage.getItem('token');
+    const playerId = localStorage.getItem(this.playerIdKey);
+    const token = localStorage.getItem(this.tokenKey);
     return playerId && token ? { playerId, token } : null;
   }
 
@@ -43,8 +47,8 @@ export class ServerClient {
       }
 
       const data: RegisterResponse = await res.json();
-      localStorage.setItem('playerId', data.playerId);
-      localStorage.setItem('token', data.token);
+      localStorage.setItem(this.playerIdKey, data.playerId);
+      localStorage.setItem(this.tokenKey, data.token);
       return data;
     } catch (e) {
       console.warn('Registration failed with error:', e);
