@@ -10,6 +10,7 @@ import { Background, BACKGROUND_SLOTS } from './Background';
 import { Balance } from './Balance';
 import { BigTV } from './bigTV/BigTV';
 import { DayTimer } from './dayTimer/DayTimer';
+import { Drawing } from './drawing/Drawing';
 import { GameDrawingBoard } from './drawing/GameDrawingBoard';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
@@ -34,7 +35,8 @@ export class GameScreen extends Container implements AppScreen {
   private balance: Balance;
   private server: Server;
   private bigTV: BigTV;
-  private drawing: GameDrawingBoard;
+  private drawingBoard: GameDrawingBoard;
+  private drawing: Drawing;
   private guessing: Guessing;
   private dayTimer: DayTimer;
   private hintPanel: HintPanel;
@@ -61,17 +63,22 @@ export class GameScreen extends Container implements AppScreen {
     this.bigTV = new BigTV(this.balance);
     this.background.addObjectToSlot(BACKGROUND_SLOTS.BIG_MONITOR, this.bigTV.getTVSpine());
 
-    this.drawing = new GameDrawingBoard();
+    this.drawingBoard = new GameDrawingBoard();
+    this.drawing = new Drawing();
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
 
     this.guessing = new Guessing(this.balance);
     this.background.addObjectToSlot(BACKGROUND_SLOTS.FAX, this.guessing.getFaxSpine());
 
     this.dayTimer = new DayTimer();
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.CLOCK, this.dayTimer.getTimerSpine());
+
     this.hintPanel = new HintPanel();
 
     // TODO: на самом деле нужно подумать как конкретно разместить слои. Что-то будет под бэкграундом, что-то над ним. Реализовать в процессе внедрения ассетов.
     this.mainContainer.addChild(this.background, this.bigTV, this.guessing, this.dayTimer, this.hintPanel);
-    this.background.mountDrawingBoard(this.drawing);
+    this.background.mountDrawingBoard(this.drawingBoard);
 
     this.wireCallbacks();
   }
@@ -80,7 +87,7 @@ export class GameScreen extends Container implements AppScreen {
   private wireCallbacks(): void {
     this.bigTV.onVisitorLeft = () => this.handleVisitorLeft();
 
-    this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
+    this.drawingBoard.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
     this.guessing.onFaxRequested = () => this.handleFaxRequested();
     this.guessing.onGuessMade = (correct, author) => this.handleGuessMade(correct, author);
@@ -94,7 +101,7 @@ export class GameScreen extends Container implements AppScreen {
   public prepare() {
     this.mainContainer.alpha = 0;
     this.setupEventHandlers();
-    this.drawing.activate();
+    this.drawingBoard.activate();
 
     // TODO: загрузить baked photofits из ассетов и передать в server.setBakedPhotofits(...)
 
@@ -120,16 +127,18 @@ export class GameScreen extends Container implements AppScreen {
     const dt = Math.min(time.deltaMS * 0.001, MAX_DT);
 
     // Таймер дня
-    this.dayTimer.update(deltaMs);
-    this.balance.dayTimeRemainingMs = this.dayTimer.getRemainingMs();
+    this.dayTimer.update(dt);
+    this.balance.dayTimeRemainingSec = this.dayTimer.getRemainingSec();
 
     // Видимые системы
     this.background.updateFrame(deltaMs);
-    this.drawing.tick(time);
+    this.drawingBoard.tick(time);
 
     // FIXME: Syncronyze all dt!
     this.bigTV.update(dt);
     this.guessing.update(dt);
+    this.drawing.update(dt);
+    this.dayTimer.update(dt);
 
     // Логика стейта
     this.tickState(deltaMs);
@@ -142,9 +151,10 @@ export class GameScreen extends Container implements AppScreen {
     }
 
     // Конец дня
-    if (this.balance.isDayOver() && this.state !== GameStates.dayEnded) {
+    // FIXME: нужно корректно настроить эту логику. Сейчас будет блочить игру.
+    /* if (this.balance.isDayOver() && this.state !== GameStates.dayEnded) {
       this.endDay();
-    }
+    } */
   }
 
   /** Resize the screen, fired whenever window size changes */
@@ -319,10 +329,10 @@ export class GameScreen extends Container implements AppScreen {
 
         // FIXME: тестово делаем взаимодействие с рисованием.
         setTimeout(() => {
-          this.drawing.onDrawingFirstInteraction();
+          this.drawingBoard.onDrawingFirstInteraction();
         }, 2000);
         // Ждём пока пользователь начнёт взаимодействие с рисованием (или там, например, начнёт рисовать).
-        await this.drawing.waitForUserFirstInteractWithDrawing();
+        await this.drawingBoard.waitForUserFirstInteractWithDrawing();
 
         // переходим на следующий стейт
         nextState = GameStates.readyToAccept;
@@ -337,11 +347,11 @@ export class GameScreen extends Container implements AppScreen {
         // Разблокируется штамп.
         // FIXME: тестово эмулируем нажатие на штамп.
         setTimeout(() => {
-          this.drawing.onStampButtonPressed();
+          this.drawingBoard.onStampButtonPressed();
         }, testDrawingTimeToLev);
 
         // TODO: Ждём пока пользователь нажмёт на подтверждение
-        await this.drawing.waitForStampButtonPress();
+        await this.drawingBoard.waitForStampButtonPress();
 
         // TODO: РЕАЛИЗОВАТЬ
         // После этого запускается анимация закрытия и ухода папки.
@@ -556,7 +566,7 @@ export class GameScreen extends Container implements AppScreen {
     // TODO: проверить, всё ли тут ок и что тут происходит. Например явно таймер spawnDelayMs нужно запускать в визитёре.
     // А вот запускать дневной таймер как будто бы вполне можно и тут.
     this.balance.startDay();
-    this.dayTimer.startDay(this.balance.getDayDurationMs(), this.balance.day);
+    this.dayTimer.startDay(this.balance.getDayDurationSec(), this.balance.day);
     this.spawnDelayMs = this.balance.getVisitorSpawnDelaySec();
   }
 
@@ -634,7 +644,7 @@ export class GameScreen extends Container implements AppScreen {
 
   private onPointerMove(e: FederatedPointerEvent) {
     const { x, y } = engine().virtualScreen.toVirtualCoordinates(e.global.x, e.global.y);
-    this.background.updateMouse(x, y, this.drawing.getHolstCenterVirtual());
+    this.background.updateMouse(x, y, this.drawingBoard.getHolstCenterVirtual());
   }
 
   private setupEventHandlers() {

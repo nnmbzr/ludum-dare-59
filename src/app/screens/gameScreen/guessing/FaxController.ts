@@ -4,7 +4,8 @@ import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
 import type { Container } from 'pixi.js';
 
 export const FaxAnimation = {
-  IDLE: 'idle',
+  IDLE_EMPTY: 'idle_empty',
+  IDLE_PAPER: 'idle_paper',
   NUMBERS: 'numbers',
   RECEIVE: 'recieve',
   SEND: 'send',
@@ -26,7 +27,7 @@ export class FaxController extends SpineObjectController {
     super(SPINE_SETTINGS);
 
     this.state.data.defaultMix = 0.2;
-    this.play(FaxAnimation.IDLE, true, 0);
+    this.play(FaxAnimation.IDLE_EMPTY, true, 0);
   }
 
   public waitServerResponce(): void {
@@ -35,12 +36,12 @@ export class FaxController extends SpineObjectController {
 
   public async acceptsServerResponse(): Promise<void> {
     await this.play(FaxAnimation.RECEIVE, false, 0);
-    this.play(FaxAnimation.IDLE, true, 0);
+    this.play(FaxAnimation.IDLE_PAPER, true, 0);
   }
 
   public async guessRecived(): Promise<void> {
     await this.play(FaxAnimation.SEND, false, 0);
-    this.play(FaxAnimation.IDLE, true, 0);
+    this.play(FaxAnimation.IDLE_EMPTY, true, 0);
   }
 
   public addToSlot(slot: FaxSlots, object: Container): void {

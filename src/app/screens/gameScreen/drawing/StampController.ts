@@ -1,9 +1,9 @@
 import { SpineObjectController } from '@/app/objects/SpineObjectController';
-import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
-import type { Event } from '@esotericsoftware/spine-pixi-v8';
+import type { Event, TrackEntry } from '@esotericsoftware/spine-pixi-v8';
 
 export const StampAnimation = {
   STAMP: 'stamp',
+  STAMP_IDLE: 'idle',
 } as const;
 
 const SPINE_EVENT = {
@@ -16,17 +16,15 @@ const SPINE_SETTINGS = {
 };
 
 export class StampController extends SpineObjectController {
-  private isShowing = false;
   private stampDownCallback: (() => void) | null = null;
 
   constructor() {
     super(SPINE_SETTINGS);
 
     this.state.data.defaultMix = 0.2;
-    this.state.setEmptyAnimation(0);
+    this.state.setAnimation(0, StampAnimation.STAMP_IDLE, false);
     this.spine.scale.set(1);
 
-    this.isShowing = false;
     this.setupEventListener();
   }
 
@@ -41,19 +39,15 @@ export class StampController extends SpineObjectController {
   }
 
   public async stamp(onStampDown?: () => void): Promise<void> {
-    this.isShowing = true;
     this.stampDownCallback = onStampDown ?? null;
 
     await this.play(StampAnimation.STAMP, false, 0);
 
     this.stampDownCallback = null;
     this.state.setEmptyAnimation(0);
-    this.isShowing = false;
   }
 
   public override update(_dt: number): void {
-    if (!this.isShowing) return;
-
     super.update(_dt);
   }
 

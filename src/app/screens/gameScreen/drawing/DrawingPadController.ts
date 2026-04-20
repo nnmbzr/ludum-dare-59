@@ -24,12 +24,7 @@ export class DrawingPadController extends SpineObjectController {
     this.state.setEmptyAnimation(0);
     this.spine.scale.set(1);
 
-    this.isShowing = false;
-  }
-
-  public async open(): Promise<void> {
     this.isShowing = true;
-    return this.play(DrawingPadAnimation.OPEN, false, 0);
   }
 
   public async close(): Promise<void> {
@@ -39,7 +34,9 @@ export class DrawingPadController extends SpineObjectController {
   }
 
   public async newFolderUp(): Promise<void> {
-    return this.play(DrawingPadAnimation.NEW_FOLDER_UP, false, 0);
+    this.isShowing = true;
+    await this.play(DrawingPadAnimation.NEW_FOLDER_UP, false, 0);
+    return this.play(DrawingPadAnimation.OPEN, false, 0);
   }
 
   public override update(_dt: number): void {
