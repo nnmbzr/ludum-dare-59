@@ -12,6 +12,7 @@ export const TvAnimation = {
   ALARM_ON: 'alarm_on',
   ALARM_OFF: 'alarm_off',
   GLITCHES: 'glitches',
+  IDLE: 'idle',
   SIGNAL_DETECTED: 'signal_detected',
   SIGNAL_LOST: 'signal_lost',
 } as const;
@@ -37,10 +38,9 @@ export class TVController extends SpineObjectController {
   constructor() {
     super(SPINE_SETTINGS);
 
-    // this.state.data.defaultMix = 0.2;
+    this.state.data.defaultMix = 0.2;
 
     // Устанавливаем начальную анимацию
-    this.state.setAnimation(1, TvAnimation.ALARM_OFF, false);
     this.state.setAnimation(0, TvAnimation.GLITCHES, true);
     this.spine.scale.set(1);
 
@@ -49,11 +49,11 @@ export class TVController extends SpineObjectController {
 
   public playAlarm(): void {
     this.isShowing = true;
-    this.play(TvAnimation.ALARM_ON, true, 1);
+    this.play(TvAnimation.ALARM_ON, true, 0);
   }
 
   public stopAlarm() {
-    this.state.setAnimation(1, TvAnimation.ALARM_OFF, false);
+    this.state.setAnimation(0, TvAnimation.IDLE, false);
   }
 
   public addVisitorToSlot(slot: TvSlots, visitor: Container): void {

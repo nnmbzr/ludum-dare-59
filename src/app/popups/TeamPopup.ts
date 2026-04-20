@@ -6,9 +6,9 @@ import { engine } from '../getEngine';
 import { Label } from '../ui/Label';
 
 const FONT_SETTINGS = {
-  SemiBold: 'Marhey-SemiBold',
-  Medium: 'Marhey-Medium',
-  Regular: 'Marhey-Regular',
+  SemiBold: 'ProtestRiot-Regular',
+  Medium: 'ProtestRiot-Regular',
+  Regular: 'ProtestRiot-Regular',
 };
 
 /** Popup that shows up when gameplay is paused */

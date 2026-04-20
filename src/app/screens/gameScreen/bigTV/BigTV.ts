@@ -132,11 +132,13 @@ export class BigTV extends Container {
     return {
       staySec: 60,
       skins: {
-        eyes: 1,
-        nose: 2,
-        mouth: 3,
-        face: 4,
-        clothes: 5,
+        head: 1,
+        body: 1,
+        nose: 1,
+        ear: 1,
+        eye: 1,
+        mouth: 1,
+        brow: 1,
       },
       idleAnimation: 'idle_1',
       id: 'visitor_fallback',
