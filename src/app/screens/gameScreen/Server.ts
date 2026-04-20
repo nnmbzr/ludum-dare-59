@@ -1,43 +1,89 @@
-import { type GuessTarget } from './types';
+import { engine } from '@/app/getEngine';
+import { decodeInkLayer } from './drawing/drawingEncoder';
+import { type GuessTarget, type SkinSet } from './types';
+import type { PartIds } from '@/shared/serverTypes';
 
 /**
- * Клиент-серверное взаимодействие.
+ * Game-specific adapter for the global engine server client.
+ * Handles data mapping (SkinSet <-> PartIds) and fallbacks.
  */
 export class Server {
   private bakedPhotofits: GuessTarget[] = [];
-  private readonly baseUrl = ''; // TODO: заполнить! Пока не будет заполнено, отдаём фаллбэчные ответы.
-  private readonly timeoutMs = 3000; // сколько максимум ждём ответа
 
   public setBakedPhotofits(baked: GuessTarget[]): void {
     this.bakedPhotofits = baked;
   }
 
-  public async submitPhotofit(_base64Image: string, _originalSkins: unknown): Promise<void> {
-    // TODO:
-    // - fetch с AbortController по timeoutMs
-    // - при ошибке просто console.warn и return (не роняем игру)
-    // - тело: { image: base64Image, skins: originalSkins, nickname: ... }
+  public checkAuth(): boolean {
+    return engine().server.checkAuth();
+  }
+
+  public async register(name: string): Promise<boolean> {
+    const res = await engine().server.register(name);
+    return !!res;
+  }
+
+  public async submitPhotofit(imageBase64: string, skins: SkinSet): Promise<void> {
+    await engine().server.submitPortrait({
+      imageBase64,
+      partIds: this.skinSetToPartIds(skins),
+    });
   }
 
   public async fetchPhotofitToGuess(): Promise<GuessTarget> {
-    // TODO:
-    // - fetch получаем с сервера фоторобот для угадывания.
-    // - при ошибке или таймауте — вернуть случайный из bakedPhotofits
-    // - если и baked пуст — бросить ошибку (ЗАБЫЛИ ЗАПОЛНИТЬ!)
+    const data = await engine().server.getRandomPortrait();
+
+    if (!data) {
+      return this.getRandomBaked();
+    }
+
+    // Convert server data to game GuessTarget
+    const canvas = await decodeInkLayer(data.imageBase64);
+    return {
+      portraitId: data.portraitId,
+      authorNickname: data.authorName,
+      canvasData: canvas,
+      originalSkins: this.partIdsToSkinSet(data.partIds),
+    };
+  }
+
+  public async reportGuess(portraitId: string, correct: boolean): Promise<void> {
+    await engine().server.submitGuess({
+      portraitId,
+      correct,
+    });
+  }
+
+  public async pollMyPhotofitGuessed(): Promise<string | null> {
+    return engine().server.pollMyPhotofitGuessed();
+  }
+
+  private getRandomBaked(): GuessTarget {
     if (this.bakedPhotofits.length === 0) {
       throw new Error('No baked photofits provided');
     }
     return this.bakedPhotofits[Math.floor(Math.random() * this.bakedPhotofits.length)];
   }
 
-  public async reportGuess(_targetAuthor: string, _correct: boolean): Promise<void> {
-    // TODO: fire-and-forget fetch. Без ответа. Чтобы сервер понимал что по этому фотороботу было успешное отгадывание.
-    // Хотя конечно тут уязвимое место. Можно накрутить себе угадываний (или сбросить стату другому игроку). Как бы это прикрыть? Держать список угаданных по игроку? СЛОЖНО СЛОЖНО.
+  private skinSetToPartIds(skins: SkinSet): PartIds {
+    return {
+      head: skins.face,
+      body: skins.clothes,
+      eye: skins.eyes,
+      nose: skins.nose,
+      mouth: skins.mouth,
+      ear: 1,
+      brow: 1,
+    };
   }
 
-  public async pollMyPhotofitGuessed(): Promise<string | null> {
-    // TODO: вернуть ник того, кто угадал наш фоторобот, или null.
-    // Вызывается раз в N секунд (N ~ 5-10) из GameScreen.
-    return null;
+  private partIdsToSkinSet(partIds: PartIds): SkinSet {
+    return {
+      face: partIds.head,
+      clothes: partIds.body,
+      eyes: partIds.eye,
+      nose: partIds.nose,
+      mouth: partIds.mouth,
+    };
   }
 }

@@ -1,28 +1,22 @@
 import type { ValuesOf } from '@/app/utils/typesHelper';
+import type { PartIds } from '@/shared/serverTypes';
 
 export type PatternId = 'eyes' | 'nose' | 'mouth' | 'face' | 'clothes';
 export type SkinId = number;
 
-export interface SkinSet {
-  eyes: SkinId;
-  nose: SkinId;
-  mouth: SkinId;
-  face: SkinId;
-  clothes: SkinId;
-}
-
 export interface VisitorData {
   id: string;
-  skins: SkinSet;
+  skins: PartIds;
   idleAnimation: string;
   staySec: number;
 }
 
 /** То, что прилетело с сервера для угадывания */
 export interface GuessTarget {
+  portraitId: string;
   authorNickname: string;
-  photofitImageBase64: string; // готовая картинка, не пересобираем
-  originalSkins: SkinSet; // правильный ответ
+  canvasData: HTMLCanvasElement; // готовая картинка, не пересобираем
+  originalSkins: PartIds; // правильный ответ
 }
 
 /** Макро-состояние экрана. Управляет флоу дня. */

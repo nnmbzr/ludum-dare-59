@@ -6,12 +6,14 @@ import 'pixi.js/app';
 import { CreationAudioPlugin } from './audio/AudioPlugin';
 import { CreationNavigationPlugin } from './navigation/NavigationPlugin';
 import { CreationResizePlugin } from './resize/ResizePlugin';
+import { CreationServerPlugin } from './server/ServerPlugin';
 import { getResolution } from './utils/getResolution';
 
 extensions.remove(ResizePlugin);
 extensions.add(CreationResizePlugin);
 extensions.add(CreationAudioPlugin);
 extensions.add(CreationNavigationPlugin);
+extensions.add(CreationServerPlugin);
 
 /**
  * The main creation engine class.

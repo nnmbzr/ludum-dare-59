@@ -4,6 +4,7 @@ import { DEBUG_GAME_STATE } from '@/dev';
 import type { AppScreen } from '@/engine/navigation/navigation';
 import { waitFor } from '@/engine/utils/waitFor';
 import { MAX_DT } from '@/main';
+import type { PartIds } from '@/shared/serverTypes';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, type Ticker } from 'pixi.js';
 import { Background, BACKGROUND_SLOTS } from './Background';
@@ -11,10 +12,11 @@ import { Balance } from './Balance';
 import { BigTV } from './bigTV/BigTV';
 import { DayTimer } from './dayTimer/DayTimer';
 import { Drawing } from './drawing/Drawing';
+import { decodeInkLayer } from './drawing/drawingEncoder';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
-import { GameStates, type GameState, type GuessTarget, type SkinSet } from './types';
+import { GameStates, type GameState, type GuessTarget } from './types';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -25,6 +27,7 @@ export class GameScreen extends Container implements AppScreen {
   public static assetBundles = ['main'];
   private boundOnPointerMove = this.onPointerMove.bind(this);
   private boundOnPointerDown = this.onPointerDown.bind(this);
+  private boundOnKeyDown = this.onKeyDown.bind(this);
 
   // === Layers ===
   public mainContainer: Container;
@@ -63,6 +66,7 @@ export class GameScreen extends Container implements AppScreen {
 
     this.drawing = new Drawing();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
+
     this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
 
     this.guessing = new Guessing(this.balance);
@@ -86,7 +90,7 @@ export class GameScreen extends Container implements AppScreen {
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
     this.guessing.onFaxRequested = () => this.handleFaxRequested();
-    this.guessing.onGuessMade = (correct, author) => this.handleGuessMade(correct, author);
+    this.guessing.onGuessMade = (correct, portraitId) => this.handleGuessMade(correct, portraitId);
   }
 
   // ==========================================================================
@@ -574,7 +578,7 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   // FIXME: надо подумать куда деть эту логику получения данных. Может быть получать её из промиса в стейтмашине?
-  private async handlePhotofitSubmitted(data: string, skins: SkinSet): Promise<void> {
+  private async handlePhotofitSubmitted(data: string, skins: PartIds): Promise<void> {
     // Получаем фоторобот в виде base64
     const base64 = data; // заглушка
 
@@ -596,11 +600,11 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   // FIXME: аналогично
-  private handleGuessMade(correct: boolean, targetAuthor: string): void {
+  private handleGuessMade(correct: boolean, portraitId: string): void {
     // Награда за угадывание
     // TODO: наверное это нужно как-то явно показать!
     this.balance.paperCount += this.balance.getRewardForGuessing(correct);
-    void this.server.reportGuess(targetAuthor, correct);
+    void this.server.reportGuess(portraitId, correct);
 
     void this.guessing.dismiss().then(() => {
       // this.spawnDelayMs = this.balance.getVisitorSpawnDelaySec();
@@ -631,9 +635,74 @@ export class GameScreen extends Container implements AppScreen {
     }
   }
 
+  private async showDrawingResult(): Promise<void> {
+    const base64String = await this.drawing.getDrawingData();
+
+    // const base64String =
+    //   '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';
+
+    const padding = base64String.endsWith('==') ? 2 : base64String.endsWith('=') ? 1 : 0;
+    const sizeInKB = (base64String.length * 0.75 - padding) / 1024;
+
+    console.log('Получены данные с рисовалки:', base64String, sizeInKB);
+
+    const dataToSubmit = {
+      imageBase64: base64String,
+      partIds: {
+        head: 1,
+        body: 1,
+        nose: 1,
+        ear: 1,
+        eye: 1,
+        mouth: 1,
+        brow: 1,
+      },
+    };
+
+    engine()
+      .server.submitPortrait(dataToSubmit)
+      .then((response) => {
+        console.log('Ответ от сервера на отправку фоторобота:', response);
+      });
+  }
+
+  private async getRandomResult(): Promise<void> {
+    const randomPhoto = await engine().server.getRandomPortrait();
+
+    if (!randomPhoto) {
+      console.warn('Не удалось получить случайный фоторобот');
+      return;
+    }
+
+    const canvas = await decodeInkLayer(randomPhoto.imageBase64);
+
+    const data: GuessTarget = {
+      portraitId: randomPhoto.portraitId,
+      authorNickname: randomPhoto.authorName,
+      canvasData: canvas, // готовая картинка, не пересобираем
+      originalSkins: randomPhoto.partIds, // правильный ответ
+    };
+
+    this.guessing.presentTarget(data);
+  }
+
   // ==========================================================================
   // Input
   // ==========================================================================
+
+  private onKeyDown(e: KeyboardEvent): void {
+    if (e.code === 'KeyA') {
+      e.preventDefault();
+
+      this.showDrawingResult();
+    }
+
+    if (e.code === 'KeyR') {
+      e.preventDefault();
+
+      this.getRandomResult();
+    }
+  }
 
   private onPointerDown(_e: FederatedPointerEvent) {}
 
@@ -645,11 +714,13 @@ export class GameScreen extends Container implements AppScreen {
   private setupEventHandlers() {
     this.on('pointermove', this.boundOnPointerMove);
     this.on('pointerdown', this.boundOnPointerDown);
+    document.addEventListener('keydown', this.boundOnKeyDown);
     this.eventMode = 'static';
   }
 
   private cleanupEventHandlers() {
     this.off('pointermove', this.boundOnPointerMove);
     this.off('pointerdown', this.boundOnPointerDown);
+    document.removeEventListener('keydown', this.boundOnKeyDown);
   }
 }

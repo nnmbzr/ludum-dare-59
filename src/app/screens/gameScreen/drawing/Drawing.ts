@@ -4,11 +4,13 @@ export const BOARD_BG = 0xe8dcc8;
 export const ERASER_LIVE_FILL = 0xd4c9b8;
 export const ERASER_LIVE_FILL_ALPHA = 0.72;
 
-import type { Ticker } from 'pixi.js';
-import type { SkinSet } from '../types';
+import { engine } from '@/app/getEngine';
+import type { PartIds } from '@/shared/serverTypes';
+import { Rectangle, type Ticker } from 'pixi.js';
 import { DrawingPadController } from './DrawingPadController';
 import { GameDrawingBoard } from './GameDrawingBoard';
 import { StampController } from './StampController';
+import { encodeInkLayer } from './drawingEncoder';
 
 export class Drawing {
   private drawingPadSpine: DrawingPadController;
@@ -51,6 +53,18 @@ export class Drawing {
 
   // --- Делегирование публичного API GameDrawingBoard ---
 
+  public async getDrawingData(): Promise<string> {
+    const container = this.board.getDrawingContainer();
+
+    const srcCanvas = engine().renderer.extract.canvas({
+      target: container,
+      frame: new Rectangle(0, 0, CANVAS_W, CANVAS_H),
+      resolution: 1,
+    }) as HTMLCanvasElement;
+
+    return encodeInkLayer(srcCanvas, BOARD_BG);
+  }
+
   public activate(): void {
     this.board.activate();
   }
@@ -67,7 +81,7 @@ export class Drawing {
     return this.board.resume();
   }
 
-  public beginNewSheet(skins: SkinSet): void {
+  public beginNewSheet(skins: PartIds): void {
     this.board.beginNewSheet(skins);
   }
 
@@ -116,7 +130,7 @@ export class Drawing {
     this.stampButtonPressPromise = null;
   }
 
-  public set onSubmitted(cb: (data: string, skins: SkinSet) => void) {
+  public set onSubmitted(cb: (data: string, skins: PartIds) => void) {
     this.board.onSubmitted = cb;
   }
 

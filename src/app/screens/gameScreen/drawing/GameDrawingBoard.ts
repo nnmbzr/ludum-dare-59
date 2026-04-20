@@ -1,7 +1,7 @@
 import { engine } from '@/app/getEngine';
+import type { PartIds } from '@/shared/serverTypes';
 import gsap from 'gsap';
 import { Container, type FederatedPointerEvent, Graphics, Point, Rectangle, Text, type Ticker } from 'pixi.js';
-import type { SkinSet } from '../types';
 import { BOARD_BG, CANVAS_H, CANVAS_W, ERASER_LIVE_FILL, ERASER_LIVE_FILL_ALPHA } from './Drawing';
 const ERASER_LIVE_STROKE = 0x4a4a55;
 const BRUSH_GROW_SEC = 1.05;
@@ -61,7 +61,7 @@ type DrawTool = 'brush' | 'eraser';
 export class GameDrawingBoard extends Container {
   private paused = false;
 
-  public onSubmitted: (data: string, skins: SkinSet) => void = () => {};
+  public onSubmitted: (data: string, skins: PartIds) => void = () => {};
 
   private board: Container;
   private bg: Graphics;
@@ -697,7 +697,11 @@ export class GameDrawingBoard extends Container {
     this.attachCanvasHolstPointer();
   }
 
-  public beginNewSheet(_skins: SkinSet): void {
+  public getDrawingContainer(): Container {
+    return this.inkStrokesLayer;
+  }
+
+  public beginNewSheet(_skins: PartIds): void {
     void _skins;
     this.reset();
     this.activate();
