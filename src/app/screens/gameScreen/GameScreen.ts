@@ -17,7 +17,7 @@ import { decodeInkLayer } from './drawing/drawingEncoder';
 import { Guessing } from './guessing/Guessing';
 import { HintPanel } from './HintPanel';
 import { Server } from './Server';
-import { GameStates, type GameState, type GuessTarget } from './types';
+import { GameStates, type GameState, type GuessTarget, type VisitorData } from './types';
 
 // Время между опросом сервера на уведомления (есть ли у нас отгаданные фотороботы)
 const SPAWN_POLL_INTERVAL_MS = 15_000;
@@ -217,10 +217,6 @@ export class GameScreen extends Container implements AppScreen {
 
     console.log('Текущий стейт:', this.state);
 
-    // Тестовая задержка перед тем как заапрувить фоторобот.
-    // FIXME: НЕ ЗАБЫТЬ УДАЛИТЬ ПОСЛЕ ТЕСТОВ!
-    const testDrawingTimeToLev = 180_000;
-
     let nextState: GameState | undefined;
 
     // TODO: ВНЕДРИТЬ ПРОВЕРКУ ЕСЛИ ВРЕМЯ ЗАКОНЧИЛОСЬ
@@ -315,10 +311,10 @@ export class GameScreen extends Container implements AppScreen {
         this.bigTV.startVisitorStayTimer();
 
         // FIXME: РЕАЛИЗОВАТЬ
-        // Папка становится доступна для взаимодействия.
-        // Если камера игрока при этом находится внизу, на папке, то лочим её.
-        // Чтобы пользователь мог спокойно работать с рисованием.
-        // Если пользователь уводит мышку в стороны (далеко от папки), то возвращаем управление камерой
+        // !!! Папка становится доступна для взаимодействия.
+        // +++Если камера игрока при этом находится внизу, на папке, то лочим её.
+        // +++Чтобы пользователь мог спокойно работать с рисованием.
+        // +++Если пользователь уводит мышку в стороны (далеко от папки), то возвращаем управление камерой
         this.drawing.readyToDraw();
 
         // FIXME: тестово делаем взаимодействие с рисованием.
@@ -339,21 +335,39 @@ export class GameScreen extends Container implements AppScreen {
         this.hintPanel.setHintForState(this.state);
 
         // Разблокируется штамп.
-        // FIXME: тестово эмулируем нажатие на штамп.
-        setTimeout(() => {
+        this.drawing.enableStamp();
+
+        /* setTimeout(() => {
           this.drawing.onStampButtonPressed();
-        }, testDrawingTimeToLev);
+        }, testDrawingTimeToLev); */
 
         // TODO: Ждём пока пользователь нажмёт на подтверждение
         await this.drawing.waitForStampButtonPress();
 
+        // FIXME: ВЫКЛЮЧАЕМ ВОЗМОЖНОСТЬ РИСОВАТЬ
+        this.drawing.deactivateDrawing();
+
         // TODO: РЕАЛИЗОВАТЬ
-        // После этого запускается анимация закрытия и ухода папки.
-        // Увеличивается счётчик обслуженных посетителей.
+        // +++ Запускается анимация штампирования
+        // +++ Добавляем в контейнер спрайт штампа
+        await this.drawing.toPutStamp();
+
+        // +++ Отправляем на сервер данные фоторобота.
+        // +++ Получаем визитёра из BigTV
+        this.sendDrawingResult(await this.drawing.getDrawingData(), this.bigTV.getCurrentVisitor());
+
+        // +++ После этого запускается анимация закрытия и ухода папки.
+        await this.drawing.closeDrawingPad();
+
+        // FIXME: ОТВЯЗЫВАЕМ КАМЕРУ
+        this.drawing.disableCameraLock();
+
+        // +++ Увеличиваем очки и обновляем счётчик обслуженных посетителей.
+        this.balance.visitorServed();
+        this.hintPanel.setPoints(this.balance.getCurrentPoints());
+
         // ++++ Камера гаснет (если посетитель уже на камере, то потом просто скрываем его).
         this.bigTV.turnOffCamera();
-        // Сейчас просто эмулируем все эти анимации
-        await waitFor(3);
 
         // Переходим на следующий стейт
         nextState = GameStates.decideWhatNext;
@@ -370,6 +384,7 @@ export class GameScreen extends Container implements AppScreen {
         // TODO: возможно лучше делать это в соответствующем классе.
         // вместе с запуском анимаций итд.
         this.balance.paperCount--;
+        // ОБНОВЛЯЕМ СЧЁТЧИК ПАПОК НА ЭКРАНЕ
 
         // Если папки ещё есть, переходим на 2 waitingForVisitor
         if (this.balance.paperCount > 0) {
@@ -641,28 +656,19 @@ export class GameScreen extends Container implements AppScreen {
     }
   }
 
-  private async showDrawingResult(): Promise<void> {
-    const base64String = await this.drawing.getDrawingData();
-
+  private async sendDrawingResult(drawingBase64: string, visitor: VisitorData): Promise<void> {
     // const base64String =
     //   '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';
 
-    const padding = base64String.endsWith('==') ? 2 : base64String.endsWith('=') ? 1 : 0;
-    const sizeInKB = (base64String.length * 0.75 - padding) / 1024;
+    const padding = drawingBase64.endsWith('==') ? 2 : drawingBase64.endsWith('=') ? 1 : 0;
+    const sizeInKB = (drawingBase64.length * 0.75 - padding) / 1024;
 
-    console.log('Получены данные с рисовалки:', base64String, sizeInKB);
+    console.log('Размер фоторобота в КБ:', sizeInKB);
+    console.log('Получены данные с рисовалки:', drawingBase64, JSON.stringify(visitor.skins));
 
     const dataToSubmit = {
-      imageBase64: base64String,
-      partIds: {
-        head: 1,
-        body: 1,
-        nose: 1,
-        ear: 1,
-        eye: 1,
-        mouth: 1,
-        brow: 1,
-      },
+      imageBase64: drawingBase64,
+      partIds: visitor.skins,
     };
 
     engine()
@@ -722,7 +728,7 @@ export class GameScreen extends Container implements AppScreen {
     if (e.code === 'KeyK') {
       e.preventDefault();
 
-      this.showDrawingResult();
+      // this.showDrawingResult();
     }
 
     if (e.code === 'KeyL') {
