@@ -20,6 +20,7 @@ export interface VisitorData {
 
 /** То, что прилетело с сервера для угадывания */
 export interface GuessTarget {
+  portraitId: string;
   authorNickname: string;
   canvasData: HTMLCanvasElement; // готовая картинка, не пересобираем
   originalSkins: SkinSet; // правильный ответ

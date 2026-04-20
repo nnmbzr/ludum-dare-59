@@ -19,7 +19,7 @@ export class Guessing extends Container {
   private balance: Balance;
 
   public onFaxRequested: () => void = () => {};
-  public onGuessMade: (correct: boolean, targetAuthor: string) => void = () => {};
+  public onGuessMade: (correct: boolean, portraitId: string) => void = () => {};
 
   // Ожидание нажатия на кнопку факса
   private faxButtonPressPromise: Promise<void> | null = null;
@@ -107,7 +107,7 @@ export class Guessing extends Container {
     this.monitorsEnabled = false;
 
     const correct = index === this.correctMonitorIndex;
-    this.onGuessMade(correct, this.currentTarget.authorNickname);
+    this.onGuessMade(correct, this.currentTarget.portraitId);
 
     // TODO: анимация ответа на выбранном мониторе, убрать лист из факса
   }

@@ -89,7 +89,7 @@ export class GameScreen extends Container implements AppScreen {
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
     this.guessing.onFaxRequested = () => this.handleFaxRequested();
-    this.guessing.onGuessMade = (correct, author) => this.handleGuessMade(correct, author);
+    this.guessing.onGuessMade = (correct, portraitId) => this.handleGuessMade(correct, portraitId);
   }
 
   // ==========================================================================
@@ -599,11 +599,11 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   // FIXME: аналогично
-  private handleGuessMade(correct: boolean, targetAuthor: string): void {
+  private handleGuessMade(correct: boolean, portraitId: string): void {
     // Награда за угадывание
     // TODO: наверное это нужно как-то явно показать!
     this.balance.paperCount += this.balance.getRewardForGuessing(correct);
-    void this.server.reportGuess(targetAuthor, correct);
+    void this.server.reportGuess(portraitId, correct);
 
     void this.guessing.dismiss().then(() => {
       // this.spawnDelayMs = this.balance.getVisitorSpawnDelaySec();
@@ -648,6 +648,7 @@ export class GameScreen extends Container implements AppScreen {
     const canvas = await decodeInkLayer(base64String);
 
     const data: GuessTarget = {
+      portraitId: 'local-test',
       authorNickname: 'NNMBZR',
       canvasData: canvas, // готовая картинка, не пересобираем
       originalSkins: {
