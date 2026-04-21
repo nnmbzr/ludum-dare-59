@@ -35,7 +35,7 @@ export class FaxController extends SpineObjectController {
     // this.state.data.defaultMix = 0.2;
     this.play(FaxAnimation.IDLE_EMPTY, true, 0);
 
-    this.button = new SpriteButton(Sprite.from('fax_button_off'), Sprite.from('fax_button_on'), onFaxButtonPressed);
+    this.button = new SpriteButton(Sprite.from('fax_button_on'), Sprite.from('fax_button_off'), onFaxButtonPressed);
     this.button.enabled = false;
     this.spine.addSlotObject(FaxSlots.BUTTON, this.button);
 

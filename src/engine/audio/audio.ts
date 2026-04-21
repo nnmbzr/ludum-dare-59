@@ -1,5 +1,6 @@
 import { type IMediaInstance, type PlayOptions, type Sound, sound } from '@pixi/sound';
 import gsap from 'gsap';
+import { Assets } from 'pixi.js';
 
 /**
  * Handles music background, playing only one audio file in loop at time,
@@ -29,7 +30,7 @@ export class BGM {
     }
 
     // Find out the new instance to be played
-    this.current = sound.find(alias);
+    this.current = sound.exists(alias) ? sound.find(alias) : Assets.get<Sound>(alias);
 
     // Play and fade in the new music
     this.currentAlias = alias;
@@ -92,7 +93,8 @@ export class SFX {
   /** Play an one-shot sound effect */
   public async play(alias: string, options?: PlayOptions): Promise<IMediaInstance> {
     const volume = this.volume * (options?.volume ?? 1);
-    const instance = await sound.play(alias, { ...options, volume });
+    const snd = sound.exists(alias) ? sound.find(alias) : Assets.get<Sound>(alias);
+    const instance = await snd.play({ ...options, volume });
 
     return instance;
   }
