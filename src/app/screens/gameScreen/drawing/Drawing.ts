@@ -71,6 +71,7 @@ export class Drawing {
   }
 
   public async newDrawingPadUpAnimation(): Promise<void> {
+    this.board.beginNewSheet();
     await this.drawingPadSpine.newFolderUp();
   }
 
@@ -122,8 +123,8 @@ export class Drawing {
     return this.board.resume();
   }
 
-  public beginNewSheet(skins: PartIds): void {
-    this.board.beginNewSheet(skins);
+  public beginNewSheet(): void {
+    this.board.beginNewSheet();
   }
 
   public getHolstCenterVirtual(): { x: number; y: number } {
