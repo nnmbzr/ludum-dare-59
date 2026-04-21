@@ -25,7 +25,7 @@ export class MainMenuScreen extends Container implements AppScreen {
     this.addChild(this.mainContainer);
 
     this.nameLabel = new Text({
-      text: 'ВВЕДИТЕ ИМЯ',
+      text: 'NAME',
       style: { fill: 0xffffff, fontSize: 48, fontWeight: 'bold' },
     });
     this.nameLabel.anchor.set(0.5);
@@ -34,7 +34,7 @@ export class MainMenuScreen extends Container implements AppScreen {
     const inputBg = new Graphics().roundRect(0, 0, 500, 80, 12).fill({ color: 0x444444 });
     this.input = new Input({
       bg: inputBg,
-      placeholder: 'Введите имя...',
+      placeholder: 'Enter your name...',
       maxLength: 16,
       align: 'center',
       textStyle: { fill: 0xffffff, fontSize: 36 },
@@ -49,7 +49,7 @@ export class MainMenuScreen extends Container implements AppScreen {
 
     const btnBg = new Graphics().roundRect(0, 0, 300, 80, 12).fill({ color: 0xe72264 });
     const btnLabel = new Text({
-      text: 'НАЧАТЬ',
+      text: 'START',
       style: { fill: 0xffffff, fontSize: 36, fontWeight: 'bold' },
     });
     btnLabel.anchor.set(0.5);
