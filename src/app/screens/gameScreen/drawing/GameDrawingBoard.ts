@@ -15,27 +15,14 @@ const THICKNESS_PRESETS = [
 const UI_PAD = 10;
 const UI_W = 168;
 const TEMPLATE_CHIP = 52;
-const TEMPLATE_GAP = 8;
 const TOOLS_Y = 52;
 const TOOL_ROW_H = 38;
 const THICKNESS_Y = TOOLS_Y + TOOL_ROW_H + 6;
 const THICKNESS_ROW_H = 32;
 const TEMPLATES_TOP = THICKNESS_Y + THICKNESS_ROW_H + 12;
 const PANEL_BOTTOM_PAD = 18;
-const TEMPLATE_ROWS = 3;
 const UI_PANEL_H = TEMPLATES_TOP + PANEL_BOTTOM_PAD;
 const PLACED_SCALE = 1.35;
-
-type TemplateKind =
-  | 'heart'
-  | 'heart_crimson'
-  | 'heart_wire'
-  | 'star'
-  | 'star_sapphire'
-  | 'star_silver'
-  | 'cloud'
-  | 'cloud_storm'
-  | 'cloud_candy';
 
 const STROKE_LIVE_POINT_CAP = 340;
 const STROKE_LIVE_KEEP = 40;
@@ -91,15 +78,10 @@ export class GameDrawingBoard extends Container {
   private uiDockTargetX = 0;
   private uiDockHiddenX = 0;
 
-  private dragCat: number | null = null;
-  private dragTemplateKind: TemplateKind | null = null;
-  private dragGhost: Container | null = null;
-  private dragGrabOnChip = { x: TEMPLATE_CHIP * 0.5, y: TEMPLATE_CHIP * 0.5 };
   private stageTemplateDrag = false;
 
   private readonly categoryVariantIx = [0, 0, 0];
   private readonly placedByCategory: (Container | null)[] = [null, null, null];
-  private readonly templateRowPreviewGfx: (Graphics | undefined)[] = [];
 
   private readonly onDomCanvasPointerMove = (ev: PointerEvent) => {
     const app = engine();

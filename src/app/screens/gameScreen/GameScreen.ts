@@ -68,7 +68,8 @@ export class GameScreen extends Container implements AppScreen {
     this.drawing = new Drawing();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.DRAWING_PAD, this.drawing.getDrawingPadSpine());
 
-    this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP, this.drawing.getStampSpine());
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP_DOWN, this.drawing.getStampSpine());
+    this.background.reorderChildBefore(this.drawing.getStampSpine(), this.drawing.getDrawingPadSpine());
 
     this.guessing = new Guessing(this.balance);
     this.background.addObjectToSlot(BACKGROUND_SLOTS.FAX, this.guessing.getFaxSpine());
@@ -293,6 +294,10 @@ export class GameScreen extends Container implements AppScreen {
         this.bigTV.showVisitorOnCamera();
         // ---Возможно отбираем в этот момент управление? (ЭКСПЕРИМЕНТАЛЬНО)
 
+        // FIXME: ЕБУЧИЙ ХАК ЧТОБЫ ШТАМП НЕ МЕШАЛ РИСОВАТЬ НАСЛАЖДАТЬСЯ РИСОВАНИЕМ ТВОРИТЬ
+        this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP_DOWN, this.drawing.getStampSpine());
+        this.background.reorderChildBefore(this.drawing.getStampSpine(), this.drawing.getDrawingPadSpine());
+
         // +++++По идее, в этот-же момент должна включиться анимация вылезания папки.
         // ++++В зависимости от количества оставшихся папок, запускается анимация вылезания.
         await this.drawing.newDrawingPadUpAnimation();
@@ -351,10 +356,17 @@ export class GameScreen extends Container implements AppScreen {
         // FIXME: ВЫКЛЮЧАЕМ ВОЗМОЖНОСТЬ РИСОВАТЬ
         this.drawing.deactivateDrawing();
 
+        // FIXME: ЕБУЧИЙ ХАК ЧТОБЫ ШТАМП НЕ МЕШАЛ РИСОВАТЬ НАСЛАЖДАТЬСЯ РИСОВАНИЕМ ТВОРИТЬ
+        this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP_UP, this.drawing.getStampSpine());
+
         // TODO: РЕАЛИЗОВАТЬ
         // +++ Запускается анимация штампирования
         // +++ Добавляем в контейнер спрайт штампа
         await this.drawing.toPutStamp();
+
+        // FIXME: ЕБУЧИЙ ХАК ЧТОБЫ ШТАМП НЕ МЕШАЛ РИСОВАТЬ НАСЛАЖДАТЬСЯ РИСОВАНИЕМ ТВОРИТЬ
+        this.background.addObjectToSlot(BACKGROUND_SLOTS.STAMP_DOWN, this.drawing.getStampSpine());
+        this.background.reorderChildBefore(this.drawing.getStampSpine(), this.drawing.getDrawingPadSpine());
 
         // +++ Отправляем на сервер данные фоторобота.
         // +++ Получаем визитёра из BigTV
