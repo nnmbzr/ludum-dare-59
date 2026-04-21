@@ -35,9 +35,7 @@ export const BACKGROUND_SLOTS = {
   CLOCK: 'Container_Timer',
   FAX: 'Container_Fax',
   CALENDAR: 'Container_Calendar',
-  LEFT_MONITOR: 'Container_TV_01',
-  CENTER_MONITOR: 'Container_TV_02',
-  RIGHT_MONITOR: 'Container_TV_03',
+  UP_MONITORS: 'Container_TV_01',
   BIG_MONITOR: 'Container_TV_04',
   STAMP: 'Container_Stamp',
   DRAWING_PAD: 'Container_Drawing_Pad',
@@ -96,6 +94,14 @@ export class Background extends Container {
     this.spine.scale.set(scale);
     this.spriteSizeW = Math.max(1e-3, lb.width * scale);
     this.spriteSizeH = Math.max(1e-3, lb.height * scale);
+  }
+
+  public playMonitorsOnAnimation(): void {
+    this.spine.state.setAnimation(0, BACKGROUND_ANIMATIONS.LIGHT_SCREENS_ON, false);
+  }
+
+  public playMonitorsOffAnimation(): void {
+    this.spine.state.setAnimation(0, BACKGROUND_ANIMATIONS.LIGHT_SCREENS_OFF, false);
   }
 
   public updateFrame(deltaMs: number): void {

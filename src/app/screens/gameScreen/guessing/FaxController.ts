@@ -1,7 +1,8 @@
 import { SpineObjectController } from '@/app/objects/SpineObjectController';
+import { SpriteButton } from '@/app/ui/SpriteButton';
 import type { ValuesOf } from '@/app/utils/typesHelper';
 import type { TrackEntry } from '@esotericsoftware/spine-pixi-v8';
-import type { Container } from 'pixi.js';
+import { Sprite, Text, type Container } from 'pixi.js';
 
 export const FaxAnimation = {
   IDLE_EMPTY: 'idle_empty',
@@ -15,6 +16,7 @@ type FaxAnimation = ValuesOf<typeof FaxAnimation>;
 export const FaxSlots = {
   BUTTON: 'Container_Button',
   PAPER: 'Container_Paper',
+  NAME: 'Container_Paper_Name',
 } as const;
 type FaxSlots = ValuesOf<typeof FaxSlots>;
 
@@ -24,15 +26,47 @@ const SPINE_SETTINGS = {
 };
 
 export class FaxController extends SpineObjectController {
-  constructor() {
+  private button: SpriteButton;
+  private nameText: Text;
+
+  constructor(onFaxButtonPressed: () => void) {
     super(SPINE_SETTINGS);
 
     // this.state.data.defaultMix = 0.2;
     this.play(FaxAnimation.IDLE_EMPTY, true, 0);
+
+    this.button = new SpriteButton(Sprite.from('fax_button_off'), Sprite.from('fax_button_on'), onFaxButtonPressed);
+    this.button.enabled = false;
+    this.spine.addSlotObject(FaxSlots.BUTTON, this.button);
+
+    this.nameText = new Text({
+      text: '',
+      style: {
+        fill: 0xcc9b56,
+        fontSize: 54,
+        fontFamily: 'VT323-Regular',
+        wordWrap: true,
+        wordWrapWidth: 500,
+        align: 'center',
+      },
+    });
+    this.nameText.anchor.set(0.55, 0.21);
+    this.nameText.label = 'FAX USERNAME';
+    this.spine.addSlotObject(FaxSlots.NAME, this.nameText);
   }
 
-  public waitServerResponce(): void {
+  public buttonOn(): void {
+    this.button.buttonOn();
     this.play(FaxAnimation.NUMBERS, true, 0);
+  }
+
+  public setName(name: string): void {
+    this.nameText.text = name.length > 21 ? name.slice(0, 19) + '...' : name;
+  }
+
+  public waitServerResponse(): void {
+    // УДАЛИЛ КНОПКУ. ПОТОМ БУДЕТ КАКАЯ-ТО АНИМАЦИЯ ОЖИДАНИЯ.
+    this.play(FaxAnimation.IDLE_EMPTY, true, 0);
   }
 
   public async acceptsServerResponse(content: Container): Promise<void> {
@@ -41,9 +75,11 @@ export class FaxController extends SpineObjectController {
     this.play(FaxAnimation.IDLE_PAPER, true, 0);
   }
 
-  public async guessRecived(): Promise<void> {
+  public async guessRecived(content: Container): Promise<void> {
     await this.play(FaxAnimation.SEND, false, 0);
     this.play(FaxAnimation.IDLE_EMPTY, true, 0);
+    this.setName('');
+    this.removeFromSlot(content);
   }
 
   public addToSlot(slot: FaxSlots, object: Container): void {

@@ -2,7 +2,7 @@ import { SpineObjectController } from '@/app/objects/SpineObjectController';
 import { SpriteButton } from '@/app/ui/SpriteButton';
 import type { ValuesOf } from '@/app/utils/typesHelper';
 import type { Event, TrackEntry } from '@esotericsoftware/spine-pixi-v8';
-import { Rectangle, Sprite, Texture } from 'pixi.js';
+import { Sprite, Texture } from 'pixi.js';
 
 export const StampAnimation = {
   STAMP: 'stamp',
@@ -47,7 +47,7 @@ export class StampController extends SpineObjectController {
     };
 
     this.button = new SpriteButton(makeTransparent(), makeTransparent(), onPress);
-    this.button.hitArea = new Rectangle(-BUTTON_W / 2, -BUTTON_H / 2, BUTTON_W, BUTTON_H);
+    /// this.button.hitArea = new Rectangle(-BUTTON_W / 2, -BUTTON_H / 2, BUTTON_W, BUTTON_H);
     this.button.enabled = false;
     this.spine.addSlotObject(StampSlots.BUTTON, this.button);
 
