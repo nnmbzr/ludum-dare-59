@@ -118,6 +118,8 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   public async show(): Promise<void> {
+    engine().audio.bgm.play('music_track', { volume: 1 });
+
     await gsap.to(this.mainContainer, { alpha: 1, duration: 0.5 });
   }
 
