@@ -101,12 +101,12 @@ export class Balance {
 
   public getStartingPaperCount(): number {
     // Отдаём стартовое значение бумаги. Бумага даётся только при старте игры!
-    return 3;
+    return 1;
   }
 
   public getRewardForGuessing(correct: boolean): number {
     // TODO: нужно подумать что именно мы даём как награду
-    return correct ? 2 : 1; // TODO: формула от day. Или свитчём или ещё как-то
+    return correct ? 2 : 0; // TODO: формула от day. Или свитчём или ещё как-то
   }
 
   public visitorServed(): void {

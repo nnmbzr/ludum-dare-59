@@ -494,7 +494,7 @@ export class GameScreen extends Container implements AppScreen {
         // Увеличиваем квоту (если угадал) и добавляем бумагу на счётчик (обновляем счётчик папок).
         this.balance.paperCount += this.balance.getRewardForGuessing(this.guessing.userIsCorrect());
 
-        this.balance.visitorServed();
+        // this.balance.visitorServed();
         if (this.guessing.userIsCorrect()) {
           this.balance.visitorServed();
         }
@@ -502,8 +502,8 @@ export class GameScreen extends Container implements AppScreen {
 
         // Запускается анимация появления папки в дыре (?)
 
-        // После этого переходим на базовый стейт ожидания следующего посетителя
-        nextState = GameStates.waitingForVisitor;
+        // После этого переходим на стейт решения
+        nextState = GameStates.decideWhatNext;
 
         break;
       case GameStates.dayEnded:

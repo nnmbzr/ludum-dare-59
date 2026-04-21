@@ -45,8 +45,8 @@ export class TVController extends SpineObjectController {
     this.spine.scale.set(1);
 
     this.button = new SpriteButton(
-      Sprite.from('TV_big_button_off'),
       Sprite.from('TV_big_button_on'),
+      Sprite.from('TV_big_button_off'),
       onCameraButtonPressed,
     );
     this.button.enabled = false;
