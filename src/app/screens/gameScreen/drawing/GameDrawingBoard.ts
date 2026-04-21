@@ -9,7 +9,7 @@ const BRUSH_GROW_SEC = 1.05;
 const THICKNESS_PRESETS = [
   { r0: 2, r1: 4 },
   { r0: 4, r1: 8 },
-  { r0: 8, r1: 16 },
+  { r0: 16, r1: 16 },
 ] as const;
 
 const UI_PAD = 10;
@@ -23,11 +23,8 @@ const THICKNESS_ROW_H = 32;
 const TEMPLATES_TOP = THICKNESS_Y + THICKNESS_ROW_H + 12;
 const PANEL_BOTTOM_PAD = 18;
 const TEMPLATE_ROWS = 3;
-const UI_PANEL_H =
-  TEMPLATES_TOP + TEMPLATE_ROWS * TEMPLATE_CHIP + (TEMPLATE_ROWS - 1) * TEMPLATE_GAP + PANEL_BOTTOM_PAD;
+const UI_PANEL_H = TEMPLATES_TOP + PANEL_BOTTOM_PAD;
 const PLACED_SCALE = 1.35;
-const TEMPLATE_NAV_ARROW_W = 22;
-const TEMPLATE_NAV_GAP = 6;
 
 type TemplateKind =
   | 'heart'
@@ -39,12 +36,6 @@ type TemplateKind =
   | 'cloud'
   | 'cloud_storm'
   | 'cloud_candy';
-
-const TEMPLATE_CATALOG: readonly (readonly TemplateKind[])[] = [
-  ['heart', 'heart_crimson', 'heart_wire'],
-  ['star', 'star_sapphire', 'star_silver'],
-  ['cloud', 'cloud_storm', 'cloud_candy'],
-] as const;
 
 const STROKE_LIVE_POINT_CAP = 340;
 const STROKE_LIVE_KEEP = 40;
@@ -105,8 +96,6 @@ export class GameDrawingBoard extends Container {
   private dragGhost: Container | null = null;
   private dragGrabOnChip = { x: TEMPLATE_CHIP * 0.5, y: TEMPLATE_CHIP * 0.5 };
   private stageTemplateDrag = false;
-  private readonly onStageTemplateMove = (e: FederatedPointerEvent) => this.handleTemplateDragMove(e);
-  private readonly onStageTemplateUp = (e: FederatedPointerEvent) => this.handleTemplateDragUp(e);
 
   private readonly categoryVariantIx = [0, 0, 0];
   private readonly placedByCategory: (Container | null)[] = [null, null, null];
@@ -347,7 +336,7 @@ export class GameDrawingBoard extends Container {
       this.uiDock.addChild(box);
     }
 
-    const tplTitle = new Text({
+    /* const tplTitle = new Text({
       text: 'Templates',
       style: { fill: 0xc8ccd4, fontFamily: 'sans-serif', fontSize: 12 },
     });
@@ -360,7 +349,7 @@ export class GameDrawingBoard extends Container {
       row.position.set(0, y);
       this.uiDock.addChild(row);
       y += TEMPLATE_CHIP + TEMPLATE_GAP;
-    }
+    } */
 
     this.uiDockTargetX = CANVAS_W - UI_W - UI_PAD;
     this.uiDockHiddenX = CANVAS_W;
@@ -426,183 +415,9 @@ export class GameDrawingBoard extends Container {
     if (this.pointerOverBoard && !this.isDrawing) this.refreshHoverDot();
   }
 
-  private buildTemplateNavRow(cat: number): Container {
-    const row = new Container();
-    row.label = `template_row_${cat}`;
-
-    const rowW = TEMPLATE_NAV_ARROW_W * 2 + TEMPLATE_NAV_GAP * 2 + TEMPLATE_CHIP;
-    const rowX = (UI_W - rowW) * 0.5;
-
-    const left = new Container();
-    left.label = `template_nav_left_${cat}`;
-    left.eventMode = 'static';
-    left.cursor = 'pointer';
-    left.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP);
-    const leftBg = new Graphics()
-      .roundRect(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP, 6)
-      .fill({ color: 0x3a3a44, alpha: 1 })
-      .stroke({ width: 1, color: 0x6a6a78, alpha: 0.55 });
-    left.addChild(leftBg);
-    const leftTxt = new Text({
-      text: '‹',
-      style: { fill: 0xe8eaef, fontFamily: 'sans-serif', fontSize: 22 },
-    });
-    leftTxt.anchor.set(0.5);
-    leftTxt.position.set(TEMPLATE_NAV_ARROW_W * 0.5, TEMPLATE_CHIP * 0.5);
-    left.addChild(leftTxt);
-    left.position.set(rowX, 0);
-    left.on('pointertap', () => this.cycleTemplateCategory(cat, -1));
-    row.addChild(left);
-
-    const chip = new Container();
-    chip.label = `template_chip_cat_${cat}`;
-    chip.eventMode = 'static';
-    chip.cursor = 'grab';
-    chip.hitArea = new Rectangle(0, 0, TEMPLATE_CHIP, TEMPLATE_CHIP);
-    chip.position.set(rowX + TEMPLATE_NAV_ARROW_W + TEMPLATE_NAV_GAP, 0);
-    const preview = new Graphics();
-    this.templateRowPreviewGfx[cat] = preview;
-    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
-    drawTemplateShape(preview, kind, TEMPLATE_CHIP);
-    chip.addChild(preview);
-    chip.on('pointerdown', (e: FederatedPointerEvent) => {
-      e.stopPropagation();
-      this.beginTemplateDrag(cat, chip, e);
-    });
-    row.addChild(chip);
-
-    const right = new Container();
-    right.label = `template_nav_right_${cat}`;
-    right.eventMode = 'static';
-    right.cursor = 'pointer';
-    right.hitArea = new Rectangle(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP);
-    const rightBg = new Graphics()
-      .roundRect(0, 0, TEMPLATE_NAV_ARROW_W, TEMPLATE_CHIP, 6)
-      .fill({ color: 0x3a3a44, alpha: 1 })
-      .stroke({ width: 1, color: 0x6a6a78, alpha: 0.55 });
-    right.addChild(rightBg);
-    const rightTxt = new Text({
-      text: '›',
-      style: { fill: 0xe8eaef, fontFamily: 'sans-serif', fontSize: 22 },
-    });
-    rightTxt.anchor.set(0.5);
-    rightTxt.position.set(TEMPLATE_NAV_ARROW_W * 0.5, TEMPLATE_CHIP * 0.5);
-    right.addChild(rightTxt);
-    right.position.set(rowX + TEMPLATE_NAV_ARROW_W + TEMPLATE_NAV_GAP + TEMPLATE_CHIP + TEMPLATE_NAV_GAP, 0);
-    right.on('pointertap', () => this.cycleTemplateCategory(cat, 1));
-    row.addChild(right);
-
-    return row;
-  }
-
-  private cycleTemplateCategory(cat: number, delta: number) {
-    if (this.isDrawing) return;
-    const list = TEMPLATE_CATALOG[cat];
-    if (!list?.length) return;
-    const n = list.length;
-    this.categoryVariantIx[cat] = (this.categoryVariantIx[cat] + delta + n * 16) % n;
-    this.refreshTemplateRowPreview(cat);
-    const placed = this.placedByCategory[cat];
-    if (placed) {
-      const g = placed.getChildAt(0) as Graphics;
-      const kind = list[this.categoryVariantIx[cat]!]!;
-      drawTemplateShape(g, kind, TEMPLATE_CHIP * PLACED_SCALE);
-    }
-  }
-
-  private refreshTemplateRowPreview(cat: number) {
-    const gfx = this.templateRowPreviewGfx[cat];
-    if (!gfx) return;
-    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
-    drawTemplateShape(gfx, kind, TEMPLATE_CHIP);
-  }
-
   private addStrokeChunkBeforeActive(parent: Container, activeG: Graphics, chunk: Graphics) {
     const i = parent.getChildIndex(activeG);
     parent.addChildAt(chunk, i);
-  }
-
-  private beginTemplateDrag(cat: number, chip: Container, e: FederatedPointerEvent) {
-    if (this.dragGhost) return;
-    const kind = TEMPLATE_CATALOG[cat]![this.categoryVariantIx[cat]!]!;
-    const lp = this.board.toLocal(e.global);
-    const localOnChip = chip.toLocal(e.global);
-    this.dragGrabOnChip = {
-      x: Math.max(0, Math.min(TEMPLATE_CHIP, localOnChip.x)),
-      y: Math.max(0, Math.min(TEMPLATE_CHIP, localOnChip.y)),
-    };
-    this.dragCat = cat;
-    this.dragTemplateKind = kind;
-    this.stageTemplateDrag = true;
-    this.dragGhost = new Container();
-    this.dragGhost.label = 'template_drag_ghost';
-    this.dragGhost.eventMode = 'none';
-    const g = new Graphics();
-    drawTemplateShape(g, kind, TEMPLATE_CHIP);
-    this.dragGhost.addChild(g);
-    this.dragGhost.position.set(lp.x - this.dragGrabOnChip.x, lp.y - this.dragGrabOnChip.y);
-    this.board.addChild(this.dragGhost);
-
-    const st = engine().stage;
-    st.on('pointermove', this.onStageTemplateMove);
-    st.on('pointerup', this.onStageTemplateUp);
-    st.on('pointerupoutside', this.onStageTemplateUp);
-  }
-
-  private handleTemplateDragMove(e: FederatedPointerEvent) {
-    if (!this.dragGhost) return;
-    const lp = this.board.toLocal(e.global);
-    this.dragGhost.position.set(lp.x - this.dragGrabOnChip.x, lp.y - this.dragGrabOnChip.y);
-  }
-
-  private handleTemplateDragUp(e: FederatedPointerEvent) {
-    if (!this.dragGhost || this.dragCat === null || this.dragTemplateKind === null) {
-      this.cleanupTemplateDrag();
-      return;
-    }
-    const lp = this.board.toLocal(e.global);
-    const x = lp.x;
-    const y = lp.y;
-
-    const onCanvas = x >= 0 && x <= CANVAS_W && y >= 0 && y <= CANVAS_H && !this.pointInUiDock(lp.x, lp.y);
-
-    if (onCanvas) {
-      const cat = this.dragCat;
-      const placedSize = TEMPLATE_CHIP * PLACED_SCALE;
-      const ox = (this.dragGrabOnChip.x / TEMPLATE_CHIP) * placedSize;
-      const oy = (this.dragGrabOnChip.y / TEMPLATE_CHIP) * placedSize;
-      const existing = this.placedByCategory[cat];
-      if (existing) {
-        this.placedTemplatesLayer.removeChild(existing);
-        existing.destroy({ children: true });
-        this.placedByCategory[cat] = null;
-      }
-      const placed = new Container();
-      placed.label = `placed_cat${cat}_${this.dragTemplateKind}`;
-      placed.eventMode = 'none';
-      placed.position.set(x - ox, y - oy);
-      const g = new Graphics();
-      drawTemplateShape(g, this.dragTemplateKind, placedSize);
-      placed.addChild(g);
-      this.placedTemplatesLayer.addChild(placed);
-      this.placedByCategory[cat] = placed;
-    }
-
-    this.dragGhost.destroy({ children: true });
-    this.dragGhost = null;
-    this.dragCat = null;
-    this.dragTemplateKind = null;
-    this.cleanupTemplateDrag();
-
-    if (!this.pointerOverBoard) this.hideUiDock();
-  }
-
-  private cleanupTemplateDrag() {
-    this.stageTemplateDrag = false;
-    const st = engine().stage;
-    st.off('pointermove', this.onStageTemplateMove);
-    st.off('pointerup', this.onStageTemplateUp);
-    st.off('pointerupoutside', this.onStageTemplateUp);
   }
 
   private pointInUiDock(boardX: number, boardY: number): boolean {
@@ -691,7 +506,6 @@ export class GameDrawingBoard extends Container {
   public activate(): void {
     this.detachStageDrag();
     this.detachCanvasHolstPointer();
-    this.cleanupTemplateDrag();
     this.board.off('pointerdown', this.onBoardDown);
     this.board.on('pointerdown', this.onBoardDown);
     this.attachCanvasHolstPointer();
@@ -701,8 +515,7 @@ export class GameDrawingBoard extends Container {
     return this.inkStrokesLayer;
   }
 
-  public beginNewSheet(_skins: PartIds): void {
-    void _skins;
+  public beginNewSheet(): void {
     this.reset();
     this.activate();
   }
@@ -727,7 +540,6 @@ export class GameDrawingBoard extends Container {
   public reset() {
     this.detachStageDrag();
     this.detachCanvasHolstPointer();
-    this.cleanupTemplateDrag();
     this.endStroke();
     this.hideUiDockInstant();
     this.board.off('pointerdown', this.onBoardDown);
@@ -742,9 +554,6 @@ export class GameDrawingBoard extends Container {
     this.categoryVariantIx[0] = 0;
     this.categoryVariantIx[1] = 0;
     this.categoryVariantIx[2] = 0;
-    for (let c = 0; c < TEMPLATE_CATALOG.length; c++) {
-      this.refreshTemplateRowPreview(c);
-    }
     this.activeStroke.clear();
     this.strokePoints.length = 0;
     this.hideHoverDot();
@@ -1076,155 +885,4 @@ function circleIntersectsAabb(
   const dx = cx - px;
   const dy = cy - py;
   return dx * dx + dy * dy <= r * r;
-}
-
-function drawTemplateShape(g: Graphics, kind: TemplateKind, size: number) {
-  g.clear();
-  const cx = size * 0.5;
-  const cy = size * 0.5;
-  const stroke = { width: 2, color: 0x1a1a1a, alpha: 1 };
-  switch (kind) {
-    case 'heart': {
-      const s = size * 0.22;
-      g.moveTo(cx, cy + s * 1.2);
-      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
-      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
-      g.closePath();
-      g.fill({ color: 0xff6b8a, alpha: 0.85 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'heart_crimson': {
-      const s = size * 0.22;
-      g.moveTo(cx, cy + s * 1.2);
-      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
-      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
-      g.closePath();
-      g.fill({ color: 0xc62828, alpha: 0.9 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'heart_wire': {
-      const s = size * 0.22;
-      g.moveTo(cx, cy + s * 1.2);
-      g.bezierCurveTo(cx - s * 3, cy - s * 0.2, cx - s * 1.5, cy - s * 2.2, cx, cy - s * 0.9);
-      g.bezierCurveTo(cx + s * 1.5, cy - s * 2.2, cx + s * 3, cy - s * 0.2, cx, cy + s * 1.2);
-      g.closePath();
-      g.fill({ color: 0xffffff, alpha: 0.01 });
-      g.stroke({ width: 3, color: 0xad1457, alpha: 1 });
-      break;
-    }
-    case 'star': {
-      const spikes = 5;
-      const rOut = size * 0.38;
-      const rIn = rOut * 0.42;
-      for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
-        const rr = i % 2 === 0 ? rOut : rIn;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill({ color: 0xffd54a, alpha: 0.9 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'star_sapphire': {
-      const spikes = 5;
-      const rOut = size * 0.38;
-      const rIn = rOut * 0.42;
-      for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
-        const rr = i % 2 === 0 ? rOut : rIn;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill({ color: 0x3949ab, alpha: 0.92 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'star_silver': {
-      const spikes = 5;
-      const rOut = size * 0.38;
-      const rIn = rOut * 0.42;
-      for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / spikes;
-        const rr = i % 2 === 0 ? rOut : rIn;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill({ color: 0xb0bec5, alpha: 0.95 });
-      g.stroke(stroke);
-      break;
-    }
-    case 'cloud': {
-      const r0 = size * 0.14;
-      g.circle(cx - size * 0.18, cy, r0 * 1.1)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
-        .fill({ color: 0xe3f2fd, alpha: 0.95 })
-        .stroke(stroke);
-      break;
-    }
-    case 'cloud_storm': {
-      const r0 = size * 0.14;
-      const fill = { color: 0x78909c, alpha: 0.95 };
-      g.circle(cx - size * 0.18, cy, r0 * 1.1)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
-        .fill(fill)
-        .stroke(stroke);
-      break;
-    }
-    case 'cloud_candy': {
-      const r0 = size * 0.14;
-      const fill = { color: 0xf8bbd0, alpha: 0.95 };
-      g.circle(cx - size * 0.18, cy, r0 * 1.1)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx, cy - r0 * 0.3, r0 * 1.25)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.18, cy, r0 * 1.05)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx - size * 0.08, cy + r0 * 0.5, r0)
-        .fill(fill)
-        .stroke(stroke);
-      g.circle(cx + size * 0.1, cy + r0 * 0.45, r0 * 0.95)
-        .fill(fill)
-        .stroke(stroke);
-      break;
-    }
-    default:
-      break;
-  }
 }
