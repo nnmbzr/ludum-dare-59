@@ -385,6 +385,13 @@ export class GameScreen extends Container implements AppScreen {
         // ++++ Камера гаснет (если посетитель уже на камере, то потом просто скрываем его).
         this.bigTV.turnOffCamera();
 
+        // Вычитаем счётчик папок.
+        // TODO: возможно лучше делать это в соответствующем классе.
+        // вместе с запуском анимаций итд.
+        this.balance.paperCount--;
+
+        // ОБНОВЛЯЕМ СЧЁТЧИК ПАПОК НА ЭКРАНЕ
+
         // Переходим на следующий стейт
         nextState = GameStates.decideWhatNext;
 
@@ -395,12 +402,6 @@ export class GameScreen extends Container implements AppScreen {
 
         // Показываем подсказку.
         this.hintPanel.setHintForState(this.state);
-
-        // Вычитаем счётчик папок.
-        // TODO: возможно лучше делать это в соответствующем классе.
-        // вместе с запуском анимаций итд.
-        this.balance.paperCount--;
-        // ОБНОВЛЯЕМ СЧЁТЧИК ПАПОК НА ЭКРАНЕ
 
         // Если папки ещё есть, переходим на 2 waitingForVisitor
         if (this.balance.paperCount > 0) {
