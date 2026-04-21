@@ -37,7 +37,8 @@ export const BACKGROUND_SLOTS = {
   CALENDAR: 'Container_Calendar',
   UP_MONITORS: 'Container_TV_01',
   BIG_MONITOR: 'Container_TV_04',
-  STAMP: 'Container_Stamp',
+  STAMP_UP: 'Container_Stamp',
+  STAMP_DOWN: 'Container_Stamp_DOWN',
   DRAWING_PAD: 'Container_Drawing_Pad',
   HINT: 'Container_text_01',
   POINTS: 'Container_text_02',
@@ -75,6 +76,14 @@ export class Background extends Container {
 
   public addObjectToSlot(slotName: BACKGROUND_SLOTS, object: Container): void {
     this.spine.addSlotObject(slotName, object);
+  }
+
+  public reorderChildBefore(child: Container, reference: Container): void {
+    const refIdx = this.spine.getChildIndex(reference);
+    const childIdx = this.spine.getChildIndex(child);
+    if (childIdx > refIdx) {
+      this.spine.setChildIndex(child, refIdx);
+    }
   }
 
   private layoutBackgroundSpine() {
