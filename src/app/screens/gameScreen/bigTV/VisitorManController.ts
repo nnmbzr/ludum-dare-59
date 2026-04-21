@@ -15,6 +15,9 @@ export const VisitorManAnimation = {
   LONG_3: 'long_3',
   OUT: 'out',
   SUSPECT: 'suspect',
+  SUSPECT_ALIVE: 'suspect_alive',
+  SUSPECT_DEAD_FALL: 'suspect_dead_fall',
+  SUSPECT_DEAD_WIN: 'suspect_dead_win',
 } as const;
 export type VisitorManAnimation = ValuesOf<typeof VisitorManAnimation>;
 
@@ -112,6 +115,16 @@ export class VisitorManController extends SpineObjectController {
     super.update(_dt);
   }
 
+  public async showSuspectResultAnimation(isWin: boolean, isAlive: boolean): Promise<void> {
+    if (isWin && isAlive) {
+      return this.play(VisitorManAnimation.SUSPECT_ALIVE, false, 0);
+    } else if (isWin && !isAlive) {
+      return this.play(VisitorManAnimation.SUSPECT_DEAD_WIN, false, 0);
+    } else if (!isWin && !isAlive) {
+      return this.play(VisitorManAnimation.SUSPECT_DEAD_FALL, false, 0);
+    }
+  }
+
   private characterHide() {
     this.isShowing = false;
     this.state.setEmptyAnimation(0);
@@ -127,72 +140,4 @@ export class VisitorManController extends SpineObjectController {
       this.characterHide();
     }
   }
-
-  /* private getIdleAnimation(): VisitorManAnimation {
-    if (this.haveGuitar) {
-      return this.fireLit ? VisitorManAnimation.IDLE_GUITAR_FIRE : VisitorManAnimation.IDLE_GUITAR;
-    }
-    return this.fireLit ? VisitorManAnimation.IDLE_FIRE : VisitorManAnimation.IDLE;
-  } */
-
-  /**
-   * Обновляет idle-анимацию в зависимости от текущего состояния
-   * @param trackIndex Индекс трека анимации
-   */
-  /* private updateIdleAnimation(trackIndex: number = 0): void {
-    // Выбираем анимацию на основе состояния костра
-    const animation = this.getIdleAnimation();
-
-    // Устанавливаем соответствующую idle-анимацию
-    this.state.setAnimation(trackIndex, animation, true);
-  } */
-
-  /**
-   * Устанавливает состояние костра и обновляет анимацию,
-   * @param isLit Горит ли костер
-   */
-  /* public setFireState(isLit: boolean): void {
-    // Если состояние не изменилось, ничего не делаем
-    if (this.fireLit === isLit || this.guitarProcessed()) {
-      return;
-    }
-
-    this.fireLit = isLit;
-    this.updateIdleAnimation();
-  }
-
-  public toggleGuitar(): void {
-    if (this.guitarProcessed()) {
-      return;
-    }
-
-    this.haveGuitar = !this.haveGuitar;
-
-    if (this.haveGuitar) {
-      this.play(VisitorManAnimation.GUITAR_ON, false, 0);
-    } else {
-      this.updateIdleAnimation(0);
-    }
-  }
-
-  private guitarProcessed(): boolean {
-    if (this.currentAnimation() === VisitorManAnimation.GUITAR_ON) {
-      return true;
-    }
-    return false;
-  }
-
-  public clickTest(x: number, y: number) {
-    const hit = this.hitTest(x, y);
-
-    if (hit) {
-      this.toggleGuitar();
-    }
-  }
-
-  public hoverTest(x: number, y: number) {
-    const hovering = this.hitTest(x, y);
-
-    this.setFireState(hovering);
-  } */
 }

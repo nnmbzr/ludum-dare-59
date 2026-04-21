@@ -147,7 +147,6 @@ export class BigTV extends Container {
     const animation = animations[Math.floor(Math.random() * animations.length)];
     const staySec = this.gameBalance.getVisitorStaySec();
 
-    console.warn('Visitor generation not implemented, returning fallback visitor !!!');
     return {
       staySec: staySec,
       skins: skin,

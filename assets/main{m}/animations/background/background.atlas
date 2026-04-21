@@ -27,8 +27,7 @@ glow
 bounds:2,65,1189,1659
 rotate:90
 light
-bounds:1942,88,176,148
-offsets:0,0,176,156
+bounds:1942,80,176,156
 light_2
 bounds:2522,1145,1270,942
 light_tv
@@ -61,7 +60,7 @@ rotate:90
 tv right
 bounds:2515,248,1231,895
 tv_1_button_green
-bounds:1942,27,96,59
+bounds:1942,19,96,59
 tv_1_button_off
 bounds:4019,3995,96,59
 rotate:90

@@ -72,6 +72,7 @@ export class GameScreen extends Container implements AppScreen {
 
     this.guessing = new Guessing(this.balance);
     this.background.addObjectToSlot(BACKGROUND_SLOTS.FAX, this.guessing.getFaxSpine());
+    this.background.addObjectToSlot(BACKGROUND_SLOTS.UP_MONITORS, this.guessing.getMonitors());
 
     this.dayTimer = new DayTimer();
     this.background.addObjectToSlot(BACKGROUND_SLOTS.CLOCK, this.dayTimer.getTimerSpine());
@@ -94,7 +95,7 @@ export class GameScreen extends Container implements AppScreen {
     this.drawing.onSubmitted = (canvas, skins) => this.handlePhotofitSubmitted(canvas, skins);
 
     this.guessing.onFaxRequested = () => this.handleFaxRequested();
-    this.guessing.onGuessMade = (correct, portraitId) => this.handleGuessMade(correct, portraitId);
+    // this.guessing.onGuessMade = (correct, portraitId) => this.handleGuessMade(correct, portraitId);
   }
 
   // ==========================================================================
@@ -402,16 +403,16 @@ export class GameScreen extends Container implements AppScreen {
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: У факса активируется кнопка для запроса бумаги.
-        // FIXME: тестово эмулируем нажатие на факс.
-        setTimeout(() => {
+        // +++ У факса активируется кнопка для запроса бумаги.
+        this.guessing.enableFax();
+        /* setTimeout(() => {
           this.guessing.onFaxButtonPressed();
-        }, 2000);
+        }, 2000); */
 
-        // TODO: Ждём пока пользователь нажмёт на кнопку факса
+        // +++ Ждём пока пользователь нажмёт на кнопку факса
         await this.guessing.waitForFaxButtonPress();
 
-        // Переходим на следующий стейт
+        // ++++ Переходим на следующий стейт
         nextState = GameStates.waitForServerResponse;
 
         break;
@@ -421,12 +422,15 @@ export class GameScreen extends Container implements AppScreen {
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: РЕАЛИЗОВАТЬ
-        // Запускаем анимацию ожидания у факса (тряска или чёт такое).
+        // +++ Делаем запрос на сервер.
+        // +++ Серверный ответ преобразуется в картинку и помещшается в контейнер.
+        // Запускается анимация получения фоторобота.
+        await this.getRandomResult();
 
-        // TODO: РЕАЛИЗОВАТЬ
-        // Делаем запрос на сервер. Пока просто эмулируем его авэйтом.
-        await waitFor(3);
+        // +++ выключаем анимацию ожидания у факса (тряска или чёт такое).
+        // this.guessing.endServerResponse();
+
+        await waitFor(0.5);
 
         // Переходим на следующий стейт.
         nextState = GameStates.showPhotophil;
@@ -439,13 +443,12 @@ export class GameScreen extends Container implements AppScreen {
         this.hintPanel.setHintForState(this.state);
 
         // TODO: РЕАЛИЗОВАТЬ
-        // Серверный ответ преобразуется в картинку и помещшается в контейнер.
-        // Запускается анимация получения фоторобота.
-        // После этого запускаются мониторы с подозреваемыми.
-        // В них передаём информацию о целевом подозреваемом.
-        // Запускается анимация бэкграунда (загорается свет над мониторами)
-        // FIXME: тестово эмулируем всё это время делеем.
-        await waitFor(3);
+
+        // +++ Запускается анимация бэкграунда (загорается свет над мониторами)
+        this.background.playMonitorsOnAnimation();
+        // +++ После этого запускаются мониторы с подозреваемыми.
+        // +++ В них передаём информацию о целевом подозреваемом.
+        await this.guessing.showSuspects();
 
         // После этого переходим на следующий стейт
         nextState = GameStates.guessing;
@@ -457,11 +460,12 @@ export class GameScreen extends Container implements AppScreen {
         // Отображаем подсказку.
         this.hintPanel.setHintForState(this.state);
 
-        // TODO: Кнопки выбора становятся активны.
+        // +++ Кнопки выбора становятся активны.
+        this.guessing.enableMonitorButtons();
         // FIXME: тестово эмулируем нажатие на кнопку выбора.
-        setTimeout(() => {
+        /* setTimeout(() => {
           this.guessing.onGuessButtonPressed();
-        }, 2000);
+        }, 2000); */
 
         // TODO: Ждём пока пользователь нажмёт на кнопку выбора
         await this.guessing.waitForGuessButtonPress();
@@ -479,14 +483,22 @@ export class GameScreen extends Container implements AppScreen {
         this.hintPanel.setHintForState(this.state);
 
         // TODO: РЕАЛИЗОВАТЬ
-        // Показываем анимацию результата угадывания.
+        // +++ Показываем анимацию результата угадывания.
+        await this.guessing.showResults();
+
+        this.background.playMonitorsOffAnimation();
+
         // Отображаем надпись "РЕЗУЛЬТАТ: %RESULT%"
         // Увеличиваем квоту (если угадал) и добавляем бумагу на счётчик (обновляем счётчик папок).
+        this.balance.paperCount += this.balance.getRewardForGuessing(this.guessing.userIsCorrect());
+
+        this.balance.visitorServed();
+        if (this.guessing.userIsCorrect()) {
+          this.balance.visitorServed();
+        }
+        this.hintPanel.setPoints(this.balance.getCurrentPoints());
 
         // Запускается анимация появления папки в дыре (?)
-
-        // Эмулируем время показа результата угадывания
-        await waitFor(3);
 
         // После этого переходим на базовый стейт ожидания следующего посетителя
         nextState = GameStates.waitingForVisitor;
@@ -680,10 +692,32 @@ export class GameScreen extends Container implements AppScreen {
   }
 
   private async getRandomResult(): Promise<void> {
+    // FIXME: РАСКОМЕНТИТЬ БЛЯДЬ!
     let randomPhoto = await engine().server.getRandomPortrait();
 
-    // FIXME: ТЕСТИРОВАНИЕ КОНТЕЙНЕРА С ЧЁРНЫМ ФОНОМ
-    randomPhoto = null;
+    /* randomPhoto = {
+      portraitId: '6f533881-fb91-4efe-8809-39d3862c60f6',
+      authorId: 'd505ff9b-206d-47ca-bf4a-e844cee40995',
+      authorName: 'нмлща',
+      imageBase64:
+        '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',
+      partIds: {
+        head: 1,
+        body: 1,
+        nose: 1,
+        ear: 4,
+        mouth: 7,
+        brow: 1,
+        eye: 6,
+        hat: 4,
+        beard: 2,
+        scar: 1,
+        accessories: 2,
+        hair: 5,
+      },
+    }; */
+
+    console.log('Получен случайный фоторобот для угадывания:', JSON.stringify(randomPhoto));
 
     if (!randomPhoto) {
       console.warn('Не удалось получить случайный фоторобот');
@@ -718,7 +752,7 @@ export class GameScreen extends Container implements AppScreen {
       originalSkins: randomPhoto.partIds, // правильный ответ
     };
 
-    this.guessing.presentTarget(data);
+    await this.guessing.presentTarget(data);
   }
 
   // ==========================================================================
@@ -735,7 +769,7 @@ export class GameScreen extends Container implements AppScreen {
     if (e.code === 'KeyL') {
       e.preventDefault();
 
-      this.getRandomResult();
+      // this.getRandomResult();
     }
   }
 

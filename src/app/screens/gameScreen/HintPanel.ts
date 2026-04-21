@@ -28,7 +28,7 @@ export class HintPanel extends Container {
         align: 'center',
       },
     });
-    this.hintText.anchor.set(0.5, 0);
+    this.hintText.anchor.set(0.5, 0.35);
 
     this.pointsLabel = new Text({
       text: 'POINTS:',
