@@ -104,6 +104,7 @@ export class BigTV extends Container {
     this.stayTimerSec = 0;
     this.visitorSpine.hideCharacterInstance();
     this.tvSpine.removeVisitorFromSlot(this.visitorSpine);
+    this.tvSpine.turnOffCamera();
   }
 
   public update(dt: number): void {
