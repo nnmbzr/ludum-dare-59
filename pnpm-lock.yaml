@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@esotericsoftware/spine-pixi-v8':
-        specifier: ^4.2.110
-        version: 4.2.110(pixi.js@8.18.1)
+        specifier: ^4.2.112
+        version: 4.2.112(pixi.js@8.18.1)
       '@pixi/layout':
         specifier: 3.2.0
         version: 3.2.0(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.5)(yoga-layout@3.2.1)
@@ -273,14 +273,14 @@ packages:
     resolution: {integrity: sha512-ZAoA40rNMPwSm+AeHpCq8STiNAwzWLJuP8Xv4CHIc9wv/PSuExjMrmjfYNj682vW0OOiZ1HKxzvjQr9XZIisQA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@esotericsoftware/spine-canvas@4.2.110':
-    resolution: {integrity: sha512-3qN6oRoatl5+cjm+GW1nF/Bj8yoQ8EGz3TVcLhPnO9Z8tKxj2mWhEdcBGC3+fE0aIrZoDYVaHa+/+mOcK853Kw==}
+  '@esotericsoftware/spine-canvas@4.2.112':
+    resolution: {integrity: sha512-hPLprSvwW0Y4dTolywiS/AsAJQJgNMsTEntOh5JP5HxJmAEnT8IMp2kn0KuRNM1+lIrc32q35b2xQDDMmkLyvA==}
 
-  '@esotericsoftware/spine-core@4.2.110':
-    resolution: {integrity: sha512-1j/EBTCfVziHsupcsl/LatvW5vA55PRf3SolwAMuEwHFBU9oEyS1A1+QfZCPlhFAQzcTo+4iHqgR8gqEsCKVZQ==}
+  '@esotericsoftware/spine-core@4.2.112':
+    resolution: {integrity: sha512-6MXHr1V5u1GkhhOmL4QFd3CerxsFHvKKiTs4AQAckau5Lp1Tw19TOBb2bUX7WSlXUPmmLRI6w/DMZSQUBDFPUA==}
 
-  '@esotericsoftware/spine-pixi-v8@4.2.110':
-    resolution: {integrity: sha512-H99FZ0fEU9eGOAIXiOLxF2pMjvMxnNEFr+pMnjQ2qcagmUOJfgC1p2HZ40Ij52vP46wBOmOpvYIaVvbcmGpVGQ==}
+  '@esotericsoftware/spine-pixi-v8@4.2.112':
+    resolution: {integrity: sha512-VchSODKkjw3lWQsbtQSozEHtipBnxFqZYorDKRaPm7RlLQdfth+ngZoiGNaAx70B837XhL9cWCWI5TUMYmrUrw==}
     peerDependencies:
       pixi.js: ^8.16.0
 
@@ -1190,10 +1190,12 @@ packages:
   '@xmldom/xmldom@0.8.12':
     resolution: {integrity: sha512-9k/gHF6n/pAi/9tqr3m3aqkuiNosYTurLLUtc7xQ9sxB/wm7WPygCv8GYa6mS0fLJEHhqMC1ATYhz++U/lRHqg==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xmldom/xmldom@0.9.9':
     resolution: {integrity: sha512-qycIHAucxy/LXAYIjmLmtQ8q9GPnMbnjG1KXhWm9o5sCr6pOYDATkMPiTNa6/v8eELyqOQ2FsEqeoFYmgv/gJg==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -2530,15 +2532,15 @@ snapshots:
       '@eslint/core': 0.13.0
       levn: 0.4.1
 
-  '@esotericsoftware/spine-canvas@4.2.110':
+  '@esotericsoftware/spine-canvas@4.2.112':
     dependencies:
-      '@esotericsoftware/spine-core': 4.2.110
+      '@esotericsoftware/spine-core': 4.2.112
 
-  '@esotericsoftware/spine-core@4.2.110': {}
+  '@esotericsoftware/spine-core@4.2.112': {}
 
-  '@esotericsoftware/spine-pixi-v8@4.2.110(pixi.js@8.18.1)':
+  '@esotericsoftware/spine-pixi-v8@4.2.112(pixi.js@8.18.1)':
     dependencies:
-      '@esotericsoftware/spine-canvas': 4.2.110
+      '@esotericsoftware/spine-canvas': 4.2.112
       pixi.js: 8.18.1
 
   '@ffmpeg-installer/darwin-arm64@4.1.5':
